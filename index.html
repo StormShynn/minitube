@@ -59,14 +59,6 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
 .row label{flex:1;padding-right:12px}
 .row select{height:32px;border:1px solid var(--border);border-radius:8px;background:var(--input);padding:0 8px}
 .row input[type=checkbox]{width:22px;height:22px}
-.srv label{word-break:break-all}
-.srv input{margin-right:10px}
-.srv small{color:var(--sub)}
-.srv .btn{margin:0 0 0 8px}
-#add{display:flex;margin-top:12px}
-#add select,#add input{height:36px;border:1px solid var(--border);border-radius:8px;background:var(--input);padding:0 8px;font-size:16px}
-#add input{flex:1;min-width:0;margin:0 6px}
-#add .btn{margin:0}
 .hint{color:var(--sub);font-size:12px;margin-top:8px}
 .chead{display:flex;align-items:center;padding:16px 12px}
 .chead img{width:64px;height:64px;border-radius:50%;margin-right:16px;background:var(--chip)}
@@ -138,9 +130,9 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     { type: 'invidious', url: 'https://invidious.nerdvpn.de' }
   ];
   // Opened from server.py (local network or a tunnel), not from GitHub Pages: that server comes first.
-  if (/^https?:$/.test(location.protocol) && !/\.github\.io$/.test(location.hostname)) {
-    DEFAULTS.unshift({ type: 'piped', url: location.protocol + '//' + location.host });
-  }
+  var LOCAL = /^https?:$/.test(location.protocol) && !/\.github\.io$/.test(location.hostname)
+    ? { type: 'piped', url: location.protocol + '//' + location.host } : null;
+  if (LOCAL) DEFAULTS.unshift(LOCAL);
   var PREFS = { autoplay: true, resume: true, speed: 1, sponsor: true, region: 'VN', hideShorts: false, theme: 'dark',
     nativePlayer: false, cc: '' };
   var REGIONS = { VN: 'Việt Nam', US: 'Mỹ', JP: 'Nhật Bản', KR: 'Hàn Quốc', GB: 'Anh', IN: 'Ấn Độ', TH: 'Thái Lan' };
@@ -300,12 +292,9 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   };
   function B() { return BACKENDS[S().type] || BACKENDS.piped; }
 
-  function nextServer() { cur = (cur + 1) % servers.length; persist(); route(); }
   function problem(text, where) {
-    (where || app).innerHTML = '<div class="msg">' + esc(text) + '<br><small>' + esc(S().url) + '</small><br>' +
-      '<button class="btn" id="retry">Thử lại</button><button class="btn" id="swap">Đổi server</button></div>';
+    (where || app).innerHTML = '<div class="msg">' + esc(text) + '<br><button class="btn" id="retry">Thử lại</button></div>';
     document.getElementById('retry').onclick = route;
-    document.getElementById('swap').onclick = nextServer;
   }
   function request(url, ok, fail) {
     var x = new XMLHttpRequest();
@@ -319,17 +308,16 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     x.onerror = x.ontimeout = function () { fail(0); };
     x.send();
   }
-  function host(u) { return String(u).replace(/^https?:\/\//, ''); }
   // Move to the next server and return true (the caller retries there), or show the error once every
   // server was tried for this page. The server that works stays selected for the next pages.
   function failover(text, where) {
     if (++tries < servers.length) {
       cur = (cur + 1) % servers.length;
       persist();
-      toast('Server lỗi, đang thử ' + host(S().url) + '…');
+      toast('Nguồn đang lỗi, đang chuyển nguồn khác…');
       return true;
     }
-    problem(text + ' Đã thử cả ' + servers.length + ' server.', where);
+    problem(text + ' Đã thử tất cả nguồn, hãy thử lại sau ít phút.', where);
     return false;
   }
   // pathFn builds the path for the current server, because Piped and Invidious use different paths.
@@ -340,24 +328,22 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     });
   }
 
-  // Once a day, add Piped servers from a list that is re-checked automatically on GitHub.
-  var LIST_URL = 'https://raw.githubusercontent.com/jayxdcode/piped-instances/main/public/minimal.json';
-  function discover(force) {
-    if (!force && Date.now() - load('discovered', 0) < 864e5) return;
-    request(LIST_URL, function (d) {
-      var removed = load('removed', []), added = 0;
-      (d.instances || []).forEach(function (i) {
-        var url = String(i.api_url || '').replace(/\/+$/, '');
-        if (!/^https:\/\/[^\s\/]+$/.test(url) || removed.indexOf(url) >= 0) return; // third-party data: https host only
-        if (servers.some(function (s) { return s.url === url; })) return;
-        servers.push({ type: 'piped', url: url });
-        added++;
-      });
-      save('discovered', Date.now());
-      if (added) persist();
-      if (force || added) toast(added ? 'Đã thêm ' + added + ' server mới.' : 'Không có server mới.');
-      if (added && location.hash === '#/settings') settings();
-    }, function () { if (force) toast('Không tải được danh sách server.'); });
+  // servers.json is rebuilt every hour by .github/workflows/servers.yml, which tests every public server
+  // with real videos. Loaded on every start; the saved list is used until it arrives (or if it fails).
+  var SERVERS_URL = 'https://raw.githubusercontent.com/StormShynn/minitube/main/servers.json';
+  function refreshServers() {
+    request(SERVERS_URL + '?t=' + Date.now(), function (d) {
+      var fresh = (d.servers || []).filter(function (s) {
+        return BACKENDS[s.type] && /^https:\/\/[^\s\/]+$/.test(s.url || '');
+      }).map(function (s) { return { type: s.type, url: s.url }; });
+      if (!fresh.length) return;
+      if (LOCAL) fresh.unshift(LOCAL); // opened from server.py: it stays first
+      var now = S().url;
+      servers = fresh;
+      cur = 0;
+      for (var i = 0; i < servers.length; i++) if (servers[i].url === now) cur = i; // keep the one that works
+      persist();
+    }, function () {});
   }
 
   function card(v, compact) {
@@ -622,11 +608,6 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     }
     var speeds = {};
     SPEEDS.forEach(function (s) { speeds[s] = s === 1 ? 'Chuẩn' : s + 'x'; });
-    var rows = servers.map(function (s, i) {
-      return '<div class="row srv"><label><input type="radio" name="srv" value="' + i + '"' + (i === cur ? ' checked' : '') + '>' +
-        esc(s.url) + ' <small>' + esc(s.type) + '</small></label>' +
-        (servers.length > 1 ? '<button class="btn" data-del="' + i + '">Xóa</button>' : '') + '</div>';
-    }).join('');
     app.innerHTML = '<div class="page"><h1>Cài đặt</h1>' +
       '<h2>Phát video</h2>' +
       check('autoplay', 'Tự động phát video tiếp theo') +
@@ -640,50 +621,17 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       '<h2>Giao diện</h2>' +
       choose('theme', 'Chủ đề', { dark: 'Tối', light: 'Sáng' }) +
       '<h2>Lịch sử</h2>' +
-      '<div class="row"><label>Đã lưu ' + history.length + ' video</label><button class="btn" id="clear">Xóa lịch sử</button></div>' +
-      '<h2>Server</h2>' + rows +
-      '<form id="add"><select id="nt"><option value="piped">Piped</option><option value="invidious">Invidious</option></select>' +
-      '<input id="nu" type="url" placeholder="https://api.example.com" autocapitalize="off" autocorrect="off">' +
-      '<button class="btn">Thêm</button></form>' +
-      '<p class="hint">Với Piped, nhập địa chỉ API (thường bắt đầu bằng pipedapi. hoặc api.). ' +
-      'Piped thường phát được trên máy cũ, Invidious thường chỉ xem được danh sách. ' +
-      'Khi một server lỗi, app tự chuyển sang server kế tiếp và nhớ server chạy được. ' +
-      'Mỗi ngày app tự tìm thêm server Piped mới.</p>' +
-      '<button class="btn" id="find">Tìm server mới ngay</button>' +
-      '<button class="btn" id="reset">Khôi phục danh sách mặc định</button></div>';
+      '<div class="row"><label>Đã lưu ' + history.length + ' video</label><button class="btn" id="clear">Xóa lịch sử</button></div></div>';
 
     app.onchange = function (e) {
       var t = e.target, key = t.getAttribute('data-pref');
-      if (t.name === 'srv') { cur = +t.value; persist(); return; }
       if (!key) return;
       prefs[key] = t.type === 'checkbox' ? t.checked : key === 'speed' ? +t.value : t.value;
       save('prefs', prefs);
       if (key === 'theme') applyTheme();
     };
-    app.onclick = function (e) {
-      var i = e.target.getAttribute('data-del');
-      if (i === null) return;
-      var removed = load('removed', []);
-      removed.push(servers[+i].url); // so the daily server search does not add it back
-      save('removed', removed);
-      servers.splice(+i, 1);
-      if (cur >= servers.length || cur === +i) cur = 0; else if (cur > +i) cur--;
-      persist(); settings();
-    };
     document.getElementById('clear').onclick = function () {
       if (confirm('Xóa toàn bộ lịch sử xem?')) { history = []; save('history', history); settings(); }
-    };
-    document.getElementById('reset').onclick = function () {
-      servers = DEFAULTS.slice(); cur = 0; save('removed', []); persist(); settings(); discover(true);
-    };
-    document.getElementById('find').onclick = function () { discover(true); };
-    document.getElementById('add').onsubmit = function (e) {
-      e.preventDefault();
-      var url = document.getElementById('nu').value.replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
-      if (!/^https:\/\/[^\s\/]+(\/\S*)?$/.test(url)) { alert('Địa chỉ phải bắt đầu bằng https://'); return; }
-      servers.push({ type: document.getElementById('nt').value, url: url });
-      cur = servers.length - 1;
-      persist(); settings();
     };
   }
 
@@ -715,7 +663,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   };
   window.onhashchange = route;
   route();
-  discover(false);
+  refreshServers();
 })();
 </script>
 </body>

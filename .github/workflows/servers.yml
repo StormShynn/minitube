@@ -1,0 +1,34 @@
+# Every hour: test all public Piped / Invidious servers with real videos and publish the working ones
+# in servers.json, which MiniTube loads on every start.
+name: Update servers
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: servers
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test servers
+        run: python3 scripts/check_servers.py
+
+      - name: Publish servers.json if it changed
+        run: |
+          git add servers.json
+          if git diff --cached --quiet; then echo "No change"; exit 0; fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Update servers.json'
+          git push

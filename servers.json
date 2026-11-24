@@ -1,0 +1,12 @@
+{
+  "servers": [
+    {
+      "type": "piped",
+      "url": "https://api.piped.private.coffee"
+    },
+    {
+      "type": "piped",
+      "url": "https://pipedapi.ducks.party"
+    }
+  ]
+}
