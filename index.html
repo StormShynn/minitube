@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<title>MiniTube</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0f0f0f;color:#f1f1f1;font:14px/1.4 -apple-system,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+a{color:inherit;text-decoration:none}
+header{position:-webkit-sticky;position:sticky;top:0;z-index:2;display:flex;align-items:center;height:48px;padding:0 12px;background:#0f0f0f;border-bottom:1px solid #222}
+.logo{display:flex;align-items:center;font-weight:700;font-size:17px;letter-spacing:-.5px;margin-right:12px;white-space:nowrap}
+.tri{display:inline-block;border-style:solid;border-width:5px 0 5px 9px;border-color:transparent transparent transparent #fff}
+.logo b{display:flex;align-items:center;justify-content:center;width:28px;height:20px;border-radius:6px;background:#f00;margin-right:4px}
+#sf{flex:1}
+#q{width:100%;height:34px;padding:0 14px;border:1px solid #303030;border-radius:17px;background:#121212;color:#fff;font-size:16px;-webkit-appearance:none}
+.grid{display:flex;flex-wrap:wrap;padding-bottom:16px}
+.card{display:block;width:100%;margin-bottom:16px}
+@media (min-width:600px){.card{width:50%;padding:0 8px}}
+.thumb{position:relative;padding-top:56.25%;background:#222;overflow:hidden}
+.thumb img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
+.dur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);padding:1px 4px;border-radius:4px;font-size:12px;font-weight:600}
+.info{display:flex;padding:10px 12px 0}
+.av{width:36px;height:36px;border-radius:50%;margin-right:12px;flex:none;background:#333}
+h3{font-size:15px;font-weight:500;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.info p,.meta p{color:#aaa;font-size:12px;margin-top:2px}
+.card.compact{display:flex;width:100%;padding:0 12px;margin-bottom:12px}
+.compact .thumb{width:160px;padding-top:90px;flex:none;border-radius:8px}
+.compact .info{padding:0 0 0 10px}
+.compact h3{font-size:14px}
+.player{position:relative;padding-top:56.25%;background:#000}
+.player video{position:absolute;top:0;left:0;width:100%;height:100%}
+.big{position:absolute;left:50%;top:50%;width:68px;height:48px;margin:-24px 0 0 -34px;border:0;border-radius:12px;background:#f00}
+.big .tri{border-width:9px 0 9px 15px;margin-left:4px}
+.player .msg{position:absolute;top:35%;width:100%}
+.meta{padding:12px}
+h1{font-size:18px;font-weight:600;line-height:1.3}
+.chan{display:flex;align-items:center;margin-top:12px}
+.chan span{color:#aaa;font-size:12px;margin-left:8px}
+.next{font-size:16px;padding:4px 12px 12px}
+.msg{padding:32px 16px;text-align:center;color:#aaa}
+.msg button{margin-top:12px;padding:8px 16px;border:0;border-radius:18px;background:#272727;color:#fff;font-size:14px}
+</style>
+</head>
+<body>
+<header>
+  <a href="#" class="logo"><b><i class="tri"></i></b>MiniTube</a>
+  <form id="sf"><input id="q" type="search" placeholder="Tìm kiếm" autocomplete="off"></form>
+</header>
+<main id="app"></main>
+<script>
+// ES5 + XHR only: must run on Safari of iOS 10.
+(function () {
+  'use strict';
+  // shortcut: one hard-coded public Invidious instance; when it stops working, pick another from
+  // https://raw.githubusercontent.com/iv-org/documentation/master/docs/instances.md
+  var API = 'https://yt.chocolatemoo53.com';
+  var app = document.getElementById('app');
+  var q = document.getElementById('q');
+  var seq = 0;        // bumps on every navigation, so a slow old response cannot overwrite the new page
+  var stopPlayer = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; });
+  }
+  function safeUrl(u) { return /^(https?:)?\/\//.test(u || '') ? esc(u) : ''; }
+
+  function num(n) {
+    n = +n || 0;
+    function f(x, u) { return x.toFixed(1).replace(/\.0$/, '') + u; }
+    return n >= 1e9 ? f(n / 1e9, ' tỷ') : n >= 1e6 ? f(n / 1e6, ' Tr') : n >= 1e3 ? f(n / 1e3, ' N') : String(n);
+  }
+  function time(s) {
+    s = +s || 0;
+    var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
+    return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (x < 10 ? '0' : '') + x;
+  }
+  function views(v) {
+    return v.viewCountText || (v.viewCount != null ? num(v.viewCount) + ' lượt xem' : '');
+  }
+  function line(parts) { return parts.filter(Boolean).map(esc).join(' · '); }
+
+  function fail() {
+    app.innerHTML = '<div class="msg">Không tải được. Server có thể đang lỗi.<br><button id="retry">Thử lại</button></div>';
+    document.getElementById('retry').onclick = route;
+  }
+  function get(path, ok) {
+    var my = seq, x = new XMLHttpRequest();
+    x.open('GET', API + path);
+    x.timeout = 20000;
+    x.onload = function () {
+      if (my !== seq) return;
+      var data = null;
+      try { data = JSON.parse(x.responseText); } catch (e) {}
+      if (x.status === 200 && data) ok(data); else fail();
+    };
+    x.onerror = x.ontimeout = function () { if (my === seq) fail(); };
+    x.send();
+  }
+
+  function card(v, compact) {
+    if (!v || !v.videoId || (v.type && v.type !== 'video')) return '';
+    var id = encodeURIComponent(v.videoId);
+    var dur = v.liveNow ? 'TRỰC TIẾP' : v.lengthSeconds ? time(v.lengthSeconds) : '';
+    var av = !compact && v.authorThumbnails && v.authorThumbnails[0] ? safeUrl(v.authorThumbnails[0].url) : '';
+    return '<a class="card' + (compact ? ' compact' : '') + '" href="#/watch/' + id + '">' +
+      '<div class="thumb"><img src="' + API + '/vi/' + id + '/mqdefault.jpg" alt="">' +
+      (dur ? '<span class="dur">' + esc(dur) + '</span>' : '') + '</div>' +
+      '<div class="info">' + (av ? '<img class="av" src="' + av + '" alt="">' : '') +
+      '<div><h3>' + esc(v.title) + '</h3><p>' + line([v.author, views(v), v.publishedText]) + '</p></div></div></a>';
+  }
+
+  function list(path) {
+    app.innerHTML = '<p class="msg">Đang tải…</p>';
+    get(path, function (items) {
+      var html = (items || []).map(function (v) { return card(v); }).join('');
+      app.innerHTML = html ? '<div class="grid">' + html + '</div>' : '<p class="msg">Không có kết quả.</p>';
+    });
+  }
+
+  function res(f) { return parseInt(f.resolution, 10) || 0; }
+  // Returns {src} for one file that has picture and sound, {src, audio} for separate files, or null.
+  function pick(v) {
+    var muxed = (v.formatStreams || []).filter(function (f) { return /^video\/mp4/.test(f.type); });
+    if (muxed.length) return { src: muxed[muxed.length - 1].url };
+    if (v.liveNow && v.hlsUrl) return { src: v.hlsUrl };
+    var ad = v.adaptiveFormats || [];
+    var vid = ad.filter(function (f) { return /^video\/mp4.*avc1/.test(f.type) && res(f) <= 360; })
+      .sort(function (a, b) { return res(b) - res(a); })[0];
+    var aud = ad.filter(function (f) { return /^audio\/mp4.*mp4a\.40\.2/.test(f.type); })[0];
+    return vid && aud ? { src: vid.url, audio: aud.url } : null;
+  }
+
+  function play(s) {
+    var vid = document.getElementById('vid'), aud = document.getElementById('aud'), big = document.getElementById('big');
+    vid.src = s.src;
+    stopPlayer = function () { vid.pause(); if (aud) { aud.pause(); aud.removeAttribute('src'); aud.load(); } };
+    // Start both inside the tap: iOS only lets media start from a user gesture.
+    big.onclick = function () {
+      big.style.display = 'none';
+      if (aud) aud.play();
+      vid.play();
+    };
+    if (!aud) return;
+    // shortcut: picture and sound are separate files (YouTube stopped serving muxed mp4). Sound follows the
+    // picture's clock and is snapped back when it drifts more than 0.3 s; switch to a muxed source if one appears.
+    aud.src = s.audio;
+    function sync() { if (Math.abs(aud.currentTime - vid.currentTime) > 0.3) aud.currentTime = vid.currentTime; }
+    vid.onplaying = function () { sync(); aud.play(); };
+    vid.onpause = vid.onwaiting = function () { aud.pause(); };
+    vid.onseeked = vid.ontimeupdate = sync;
+  }
+
+  function watch(id) {
+    app.innerHTML = '<p class="msg">Đang tải…</p>';
+    get('/api/v1/videos/' + encodeURIComponent(id), function (v) {
+      var s = pick(v), eid = encodeURIComponent(id);
+      var av = v.authorThumbnails && v.authorThumbnails[0] ? safeUrl(v.authorThumbnails[0].url) : '';
+      app.innerHTML =
+        '<div class="player"><video id="vid" controls playsinline webkit-playsinline preload="none"' +
+        (s && s.audio ? ' muted' : '') + ' poster="' + API + '/vi/' + eid + '/hqdefault.jpg"></video>' +
+        (s ? '<button id="big" class="big" aria-label="Phát"><i class="tri"></i></button>' +
+             (s.audio ? '<audio id="aud" preload="none"></audio>' : '')
+           : '<p class="msg">Không phát được video này trên máy này.</p>') + '</div>' +
+        '<div class="meta"><h1>' + esc(v.title) + '</h1><p>' + line([views(v), v.publishedText]) + '</p>' +
+        '<div class="chan">' + (av ? '<img class="av" src="' + av + '" alt="">' : '') +
+        '<b>' + esc(v.author) + '</b><span>' + esc(v.subCountText) + '</span></div></div>' +
+        '<h2 class="next">Video tiếp theo</h2><div class="grid">' +
+        (v.recommendedVideos || []).map(function (r) { return card(r, true); }).join('') + '</div>';
+      if (s) play(s);
+    });
+  }
+
+  function route() {
+    seq++;
+    if (stopPlayer) { stopPlayer(); stopPlayer = null; }
+    var h = location.hash.replace(/^#\/?/, '').split('/');
+    if (h[0] === 'watch' && h[1]) watch(decodeURIComponent(h[1]));
+    else if (h[0] === 'search' && h[1]) { q.value = decodeURIComponent(h[1]); list('/api/v1/search?type=video&q=' + h[1]); }
+    else list('/api/v1/trending?region=VN');
+    window.scrollTo(0, 0);
+  }
+
+  document.getElementById('sf').onsubmit = function (e) {
+    e.preventDefault();
+    var text = q.value.replace(/^\s+|\s+$/g, '');
+    if (text) location.hash = '#/search/' + encodeURIComponent(text);
+    q.blur();
+  };
+  window.onhashchange = route;
+  route();
+})();
+</script>
+</body>
+</html>
