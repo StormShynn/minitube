@@ -5,6 +5,7 @@ Away from home: also run  cloudflared tunnel --url http://localhost:8000  and op
 address it prints. Video goes through this PC, because YouTube's links only work from the IP that asked for them.
 """
 import http.client
+import ipaddress
 import json
 import re
 import socket
@@ -73,7 +74,7 @@ def trending():
     return search(FALLBACK_HOME)
 
 
-def streams(vid):
+def streams(vid, direct):
     with YoutubeDL(OPTS) as y:
         d = y.extract_info('https://www.youtube.com/watch?v=' + vid, download=False)
     # YouTube's HLS master playlist has H.264 + AAC variants that iOS plays natively.
@@ -86,7 +87,9 @@ def streams(vid):
         'uploaderSubscriberCount': d.get('channel_follower_count') or -1,
         'views': d['view_count'] if d.get('view_count') is not None else -1,
         'uploadDate': f'{ud[:4]}-{ud[4:6]}-{ud[6:]}' if len(ud) == 8 else '',
-        'videoStreams': [], 'hls': via_proxy(hls) if hls else None,
+        # Same network as this PC: same public IP, so the phone can load Google's links itself
+        # (faster, and no video passes through this PC). From elsewhere (tunnel): go through /hls.
+        'videoStreams': [], 'hls': (hls if direct else via_proxy(hls)) if hls else None,
         'livestream': bool(d.get('is_live')), 'relatedStreams': [],
     }
 
@@ -107,12 +110,16 @@ class Handler(SimpleHTTPRequestHandler):
                 q = urllib.parse.parse_qs(u.query).get('q', [''])[0].strip()
                 return self.send_json({'items': search(q) if q else []})
             if m:
-                return self.send_json(streams(m.group(1)))
+                return self.send_json(streams(m.group(1), self.on_local_network()))
         except Exception as e:  # yt-dlp errors (bot check, removed video) go back to the app as text
             return self.send_json({'error': str(e)}, 500)
         if u.path in ('/', '/index.html'):  # serve only the app, never other files in this folder
             return super().do_GET()
         self.send_error(404)
+
+    def on_local_network(self):
+        # cloudflared connects from this PC itself, so a tunnel request looks local: its header gives it away.
+        return ipaddress.ip_address(self.client_address[0]).is_private and 'Cf-Connecting-Ip' not in self.headers
 
     def proxy(self, target):
         if not PROXY_OK.match(target):

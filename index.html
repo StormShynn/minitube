@@ -134,7 +134,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     ? { type: 'piped', url: location.protocol + '//' + location.host } : null;
   if (LOCAL) DEFAULTS.unshift(LOCAL);
   var PREFS = { autoplay: true, resume: true, speed: 1, sponsor: true, region: 'VN', hideShorts: false, theme: 'dark',
-    nativePlayer: false, cc: '' };
+    nativePlayer: false, cc: '', embed: true };
   var REGIONS = { VN: 'Việt Nam', US: 'Mỹ', JP: 'Nhật Bản', KR: 'Hàn Quốc', GB: 'Anh', IN: 'Ấn Độ', TH: 'Thái Lan' };
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   var HISTORY_MAX = 200;
@@ -144,6 +144,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   var q = document.getElementById('q');
   var seq = 0;          // bumps on every navigation, so a slow old response cannot overwrite the new page
   var tries = 0;        // servers tried for the current page; route() resets it
+  var altTried = 0;     // backup video sources tried for the current page; route() resets it
   var autoNext = false; // the next navigation comes from "video ended", so keep the same player
   var nextId = null;
 
@@ -310,29 +311,43 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   }
   // Move to the next server and return true (the caller retries there), or show the error once every
   // server was tried for this page. The server that works stays selected for the next pages.
-  function failover(text, where) {
+  function failover(text, where, lastResort) {
     if (++tries < servers.length) {
       cur = (cur + 1) % servers.length;
       persist();
       toast('Nguồn đang lỗi, đang chuyển nguồn khác…');
       return true;
     }
-    problem(text + ' Đã thử tất cả nguồn, hãy thử lại sau ít phút.', where);
+    if (lastResort) lastResort(); else problem(text + ' Đã thử tất cả nguồn, hãy thử lại sau ít phút.', where);
     return false;
   }
   // pathFn builds the path for the current server, because Piped and Invidious use different paths.
-  function get(pathFn, ok) {
+  function get(pathFn, ok, lastResort) {
     var my = seq;
     request(S().url + pathFn(), function (d) { if (my === seq) ok(d); }, function (status) {
-      if (my === seq && failover(status ? 'Server không trả được dữ liệu.' : 'Không kết nối được server.')) get(pathFn, ok);
+      if (my === seq && failover(status ? 'Server không trả được dữ liệu.' : 'Không kết nối được server.', null, lastResort)) {
+        get(pathFn, ok, lastResort);
+      }
     });
+  }
+  // Very last resort for a video: YouTube's own embedded player (it may show ads; can be turned off in settings).
+  function embedYouTube(id, box) {
+    box.innerHTML = '<iframe src="https://www.youtube-nocookie.com/embed/' + encodeURIComponent(id) + '?playsinline=1&rel=0"' +
+      ' allowfullscreen style="position:absolute;top:0;left:0;width:100%;height:100%;border:0"></iframe>';
+    var info = document.getElementById('info');
+    if (info && !info.querySelector('.meta')) info.innerHTML = ''; // no video details came back: drop "Đang tải…"
+    toast('Hết nguồn không quảng cáo: đang dùng trình phát YouTube.');
   }
 
   // servers.json is rebuilt every hour by .github/workflows/servers.yml, which tests every public server
   // with real videos. Loaded on every start; the saved list is used until it arrives (or if it fails).
   var SERVERS_URL = 'https://raw.githubusercontent.com/StormShynn/minitube/main/servers.json';
+  var streams = load('streams', []);
   function refreshServers() {
     request(SERVERS_URL + '?t=' + Date.now(), function (d) {
+      // Backup video sources: URL templates with {id} that return a playable mp4 for any video.
+      streams = (d.streams || []).filter(function (t) { return /^https:\/\/[^\s\/]+\/\S*\{id\}/.test(t || ''); });
+      save('streams', streams);
       var fresh = (d.servers || []).filter(function (s) {
         return BACKENDS[s.type] && /^https:\/\/[^\s\/]+$/.test(s.url || '');
       }).map(function (s) { return { type: s.type, url: s.url }; });
@@ -518,8 +533,20 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
         else setTimeout(reload, 3000);
         return;
       }
-      if (failover('Không phát được video (lỗi ' + code + ').', box)) watch(id, !vid.paused || lastT > 0, true);
+      fallback('Không phát được video (lỗi ' + code + ').', !vid.paused || lastT > 0);
     };
+    // When this server cannot play the video: backup video sources, then the other servers,
+    // then (if allowed in settings) YouTube's own embedded player as the very last resort.
+    function fallback(text, playing) {
+      if (altTried < streams.length) {
+        src = streams[altTried++].replace('{id}', encodeURIComponent(id));
+        toast('Đang thử nguồn video dự phòng…');
+        vid.src = src;
+        if (playing) vid.play();
+        return;
+      }
+      if (failover(text, box, prefs.embed ? function () { embedYouTube(id, box); } : null)) watch(id, playing, true);
+    }
 
     get(function () { return B().video(id); }, function (d) {
       var v = B().watch(d), av = safeUrl(v.avatar);
@@ -559,10 +586,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
         if (t !== null) { vid.currentTime = +t; vid.play(); window.scrollTo(0, 0); }
         else if (e.target.id === 'desc') e.target.className = e.target.className === 'desc' ? 'desc open' : 'desc';
       };
-      if (!v.src) {
-        if (failover('Server này không có bản video máy cũ phát được.', box)) watch(id, auto, true);
-        return;
-      }
+      if (!v.src) return fallback('Nguồn này không có bản video máy cũ phát được.', auto);
       if (safeUrl(v.thumb)) vid.poster = v.thumb;
       src = v.src;
       vid.src = v.src;
@@ -570,7 +594,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       // The player was started by a tap earlier, so iOS lets it continue with the next video.
       if (auto) vid.play();
       if (prefs.sponsor) sponsorSegments(id, function (s) { if (my === seq) segs = s; });
-    });
+    }, prefs.embed ? function () { embedYouTube(id, box); } : null);
   }
 
   function channel(id) {
@@ -614,6 +638,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       check('resume', 'Xem tiếp từ chỗ đã dừng') +
       check('sponsor', 'Tự bỏ qua đoạn quảng cáo tài trợ trong video (SponsorBlock)') +
       check('nativePlayer', 'Dùng trình phát gốc của iOS (nếu trình phát kiểu YouTube bị lỗi)') +
+      check('embed', 'Khi hết nguồn, dùng trình phát YouTube (có thể có quảng cáo)') +
       choose('speed', 'Tốc độ phát mặc định', speeds) +
       '<h2>Nội dung</h2>' +
       choose('region', 'Khu vực thịnh hành', REGIONS) +
@@ -638,6 +663,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   function route() {
     seq++;
     tries = 0;
+    altTried = 0;
     app.onchange = app.onclick = null;
     var auto = autoNext;
     autoNext = false;

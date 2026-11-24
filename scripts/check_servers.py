@@ -64,6 +64,25 @@ SOURCES = [
 ]
 
 
+# Backup video sources: URL templates that return a playable mp4 for any video id (no search or metadata).
+# Published under "streams" only while they pass the same download test.
+STREAM_SOURCES = [
+    'https://poketube.fun/api/video/download?v={id}&q=18',
+]
+
+
+def check_stream(template):
+    passed = 0
+    for vid in TEST_VIDEOS:
+        try:
+            status, headers, _ = fetch(template.replace('{id}', vid), rng='bytes=0-1023')
+            if (headers.get('content-type') or '').startswith('video/'):
+                passed += 1
+        except Exception:
+            pass
+    return template, passed
+
+
 def candidates():
     found = {}
     if OUT.exists():  # keep testing servers that worked before, even if a list drops them
@@ -124,6 +143,10 @@ def main():
     print(f'testing {len(found)} servers with {len(TEST_VIDEOS)} videos each')
     with cf.ThreadPoolExecutor(max_workers=32) as pool:
         results = list(pool.map(lambda item: check(*item), found.items()))
+        stream_results = list(pool.map(check_stream, STREAM_SOURCES))
+    for template, passed in stream_results:
+        print(f'{passed}/{len(TEST_VIDEOS)}  stream     {template}')
+    streams = [t for t, passed in stream_results if passed > 0]
     for url, kind, passed, secs, why in sorted(results, key=lambda r: (-r[2], r[3])):
         print(f'{passed}/{len(TEST_VIDEOS)}  {secs:>5}s  {kind:9}  {url:45}  {why}')
     # Most videos passed first, then speed in 5 s steps (exact seconds would reorder, and commit, every hour).
@@ -133,8 +156,8 @@ def main():
         return
     # Only stable fields, so the file (and the repo) changes only when the usable set or its order changes.
     servers = [{'type': r[1], 'url': r[0]} for r in good]
-    OUT.write_text(json.dumps({'servers': servers}, indent=2) + '\n', encoding='utf-8')
-    print(f'wrote {len(servers)} servers to {OUT.name}')
+    OUT.write_text(json.dumps({'servers': servers, 'streams': streams}, indent=2) + '\n', encoding='utf-8')
+    print(f'wrote {len(servers)} servers and {len(streams)} backup video sources to {OUT.name}')
 
 
 if __name__ == '__main__':
