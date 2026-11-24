@@ -8,5 +8,6 @@
       "type": "piped",
       "url": "https://pipedapi.ducks.party"
     }
-  ]
+  ],
+  "streams": []
 }
