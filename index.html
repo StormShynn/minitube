@@ -7,70 +7,102 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black">
 <title>MiniTube</title>
 <style>
+:root{--bg:#0f0f0f;--fg:#f1f1f1;--sub:#aaa;--line:#222;--chip:#272727;--input:#121212;--border:#303030}
+body.light{--bg:#fff;--fg:#0f0f0f;--sub:#606060;--line:#e5e5e5;--chip:#f2f2f2;--input:#fff;--border:#ccc}
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:#0f0f0f;color:#f1f1f1;font:14px/1.4 -apple-system,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
+body{background:var(--bg);color:var(--fg);font:14px/1.4 -apple-system,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%;padding-bottom:60px}
 a{color:inherit;text-decoration:none}
-button,select,input{font:inherit;color:#fff}
-header{position:-webkit-sticky;position:sticky;top:0;z-index:2;display:flex;align-items:center;height:48px;padding:0 12px;background:#0f0f0f;border-bottom:1px solid #222}
+button,select,input{font:inherit;color:var(--fg)}
+header{position:-webkit-sticky;position:sticky;top:0;z-index:2;display:flex;align-items:center;height:48px;padding:0 12px;background:var(--bg);border-bottom:1px solid var(--line)}
 .logo{display:flex;align-items:center;font-weight:700;font-size:17px;letter-spacing:-.5px;margin-right:12px;white-space:nowrap}
 .tri{display:inline-block;border-style:solid;border-width:5px 0 5px 9px;border-color:transparent transparent transparent #fff}
 .logo b{display:flex;align-items:center;justify-content:center;width:28px;height:20px;border-radius:6px;background:#f00;margin-right:4px}
 #sf{flex:1}
-#q{width:100%;height:34px;padding:0 14px;border:1px solid #303030;border-radius:17px;background:#121212;font-size:16px;-webkit-appearance:none}
-.gear{display:flex;align-items:center;justify-content:center;width:36px;height:36px;margin-left:6px}
+#q{width:100%;height:34px;padding:0 14px;border:1px solid var(--border);border-radius:17px;background:var(--input);font-size:16px;-webkit-appearance:none}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:3;display:flex;height:52px;background:var(--bg);border-top:1px solid var(--line)}
+nav a{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:10px;color:var(--sub)}
+nav a.on{color:var(--fg)}
+nav svg{margin-bottom:2px}
 .grid{display:flex;flex-wrap:wrap;padding-bottom:16px}
 .card{display:block;width:100%;margin-bottom:16px}
 @media (min-width:600px){.card{width:50%;padding:0 8px}}
-.thumb{position:relative;padding-top:56.25%;background:#222;overflow:hidden}
+.thumb{position:relative;padding-top:56.25%;background:var(--chip);overflow:hidden}
 .thumb img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
-.dur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);padding:1px 4px;border-radius:4px;font-size:12px;font-weight:600}
+.dur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);color:#fff;padding:1px 4px;border-radius:4px;font-size:12px;font-weight:600}
 .dur.live{background:#c00}
+.bar{position:absolute;left:0;bottom:0;height:3px;background:#f00}
 .info{display:flex;padding:10px 12px 0}
-.av{width:36px;height:36px;border-radius:50%;margin-right:12px;flex:none;background:#333}
+.av{width:36px;height:36px;border-radius:50%;margin-right:12px;flex:none;background:var(--chip)}
 h3{font-size:15px;font-weight:500;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-.info p,.meta p{color:#aaa;font-size:12px;margin-top:2px}
+.info p,.meta p{color:var(--sub);font-size:12px;margin-top:2px}
 .card.compact{display:flex;width:100%;padding:0 12px;margin-bottom:12px}
 .compact .thumb{width:160px;padding-top:90px;flex:none;border-radius:8px}
 .compact .info{padding:0 0 0 10px}
 .compact h3{font-size:14px}
 .player{position:relative;padding-top:56.25%;background:#000}
 .player video{position:absolute;top:0;left:0;width:100%;height:100%}
-.player .msg{position:absolute;top:20%;width:100%}
+.player .msg{position:absolute;top:15%;width:100%}
 .meta{padding:12px}
 h1{font-size:18px;font-weight:600;line-height:1.3}
 .chan{display:flex;align-items:center;margin-top:12px}
-.chan span{color:#aaa;font-size:12px;margin-left:8px}
-.next{font-size:16px;padding:4px 12px 12px}
-.msg{padding:32px 16px;text-align:center;color:#aaa}
-.btn{margin:12px 4px 0;padding:8px 16px;border:0;border-radius:18px;background:#272727;font-size:14px}
-.set{padding:16px 12px}
-.set h1{margin-bottom:12px}
-.srv{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #222}
-.srv label{flex:1;word-break:break-all}
+.chan span{color:var(--sub);font-size:12px;margin-left:8px}
+.tools{display:flex;align-items:center;margin-top:12px;font-size:13px;color:var(--sub)}
+.tools select{margin-left:6px;height:30px;border:0;border-radius:15px;background:var(--chip);padding:0 10px}
+.next{display:flex;align-items:center;justify-content:space-between;font-size:16px;padding:4px 12px 12px}
+.next small{font-size:12px;font-weight:400;color:var(--sub)}
+.msg{padding:32px 16px;text-align:center;color:var(--sub)}
+.btn{margin:12px 4px 0;padding:8px 16px;border:0;border-radius:18px;background:var(--chip);font-size:14px}
+.page{padding:16px 12px}
+.page h1{margin-bottom:8px}
+.page h2{font-size:13px;color:var(--sub);font-weight:600;text-transform:uppercase;margin:20px 0 4px}
+.row{display:flex;align-items:center;justify-content:space-between;min-height:48px;padding:6px 0;border-bottom:1px solid var(--line)}
+.row label{flex:1;padding-right:12px}
+.row select{height:32px;border:1px solid var(--border);border-radius:8px;background:var(--input);padding:0 8px}
+.row input[type=checkbox]{width:22px;height:22px}
+.srv label{word-break:break-all}
 .srv input{margin-right:10px}
-.srv small{color:#aaa}
+.srv small{color:var(--sub)}
 .srv .btn{margin:0 0 0 8px}
-#add{display:flex;margin-top:16px}
-#add select,#add input{height:36px;border:1px solid #303030;border-radius:8px;background:#121212;padding:0 8px;font-size:16px}
+#add{display:flex;margin-top:12px}
+#add select,#add input{height:36px;border:1px solid var(--border);border-radius:8px;background:var(--input);padding:0 8px;font-size:16px}
 #add input{flex:1;min-width:0;margin:0 6px}
 #add .btn{margin:0}
-.hint{color:#aaa;font-size:12px;margin-top:16px}
+.hint{color:var(--sub);font-size:12px;margin-top:8px}
+.chead{display:flex;align-items:center;padding:16px 12px}
+.chead img{width:64px;height:64px;border-radius:50%;margin-right:16px;background:var(--chip)}
+.chead p{color:var(--sub);font-size:13px}
+#toast{position:fixed;left:12px;right:12px;bottom:64px;z-index:4;padding:10px 14px;border-radius:8px;background:#323232;color:#fff;font-size:13px;display:none}
 </style>
 </head>
 <body>
 <header>
   <a href="#" class="logo"><b><i class="tri"></i></b>MiniTube</a>
   <form id="sf"><input id="q" type="search" placeholder="Tìm kiếm" autocomplete="off"></form>
-  <a href="#/settings" class="gear" aria-label="Chọn server"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></a>
 </header>
 <main id="app"></main>
+<nav>
+  <a href="#" id="n-home"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11l8-7 8 7v9h-5v-6H9v6H4z"/></svg>Trang chủ</a>
+  <a href="#/history" id="n-history"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>Lịch sử</a>
+  <a href="#/settings" id="n-settings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>Cài đặt</a>
+</nav>
+<div id="toast"></div>
 <script>
 // ES5 + XHR only: must run on Safari of iOS 10.
 (function () {
   'use strict';
+  var toastTimer;
+  function toast(text) {
+    var t = document.getElementById('toast');
+    t.textContent = text;
+    t.style.display = 'block';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.style.display = 'none'; }, 4000);
+  }
+  // Old iPhones have no developer console: show script errors on screen so they can be reported.
+  window.onerror = function (msg, src, line) { toast('Lỗi: ' + msg + ' (dòng ' + line + ')'); };
+
   // Piped first: it serves itag 18 (one mp4 with picture + sound) through its proxy, which old iOS can play.
-  // Update this list from https://github.com/TeamPiped/documentation (public-instances) and
-  // https://github.com/iv-org/documentation (instances.md) when servers die.
+  // Update this list from https://github.com/jayxdcode/piped-instances (public/minimal.json) when servers die.
   var DEFAULTS = [
     { type: 'piped', url: 'https://api.piped.private.coffee' },
     { type: 'piped', url: 'https://pipedapi.ducks.party' },
@@ -81,19 +113,32 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   if (/^https?:$/.test(location.protocol) && !/\.github\.io$/.test(location.hostname)) {
     DEFAULTS.unshift({ type: 'piped', url: location.protocol + '//' + location.host });
   }
+  var PREFS = { autoplay: true, resume: true, speed: 1, sponsor: true, region: 'VN', hideShorts: false, theme: 'dark' };
+  var REGIONS = { VN: 'Việt Nam', US: 'Mỹ', JP: 'Nhật Bản', KR: 'Hàn Quốc', GB: 'Anh', IN: 'Ấn Độ', TH: 'Thái Lan' };
+  var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
+  var HISTORY_MAX = 200;
+  var SPONSOR_CATS = '["sponsor","selfpromo","interaction"]';
+
   var app = document.getElementById('app');
   var q = document.getElementById('q');
-  var seq = 0; // bumps on every navigation, so a slow old response cannot overwrite the new page
+  var seq = 0;          // bumps on every navigation, so a slow old response cannot overwrite the new page
+  var autoNext = false; // the next navigation comes from "video ended", so keep the same player
+  var nextId = null;
 
   // localStorage throws in Safari private mode, so failures fall back to defaults.
   function load(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
   var servers = load('servers', DEFAULTS);
   var cur = load('cur', 0);
+  var prefs = load('prefs', {});
+  var history = load('history', []);
+  for (var k in PREFS) if (!(k in prefs)) prefs[k] = PREFS[k];
   if (!servers.length) servers = DEFAULTS;
   if (!servers[cur]) cur = 0;
   function S() { return servers[cur]; }
   function persist() { save('servers', servers); save('cur', cur); }
+  function applyTheme() { document.body.className = prefs.theme === 'light' ? 'light' : ''; }
+  applyTheme();
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; });
@@ -106,27 +151,47 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     return n >= 1e9 ? f(n / 1e9, ' tỷ') : n >= 1e6 ? f(n / 1e6, ' Tr') : n >= 1e3 ? f(n / 1e3, ' N') : String(n);
   }
   function time(s) {
-    s = +s || 0;
+    s = Math.floor(+s || 0);
     var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
     return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (x < 10 ? '0' : '') + x;
   }
   function line(parts) { return parts.filter(Boolean).map(esc).join(' · '); }
   function first(a) { return a && a[0] ? a[0].url : ''; }
+  function channelId(u) { var m = /\/channel\/([\w-]+)/.exec(u || ''); return m ? m[1] : ''; }
+
+  // ---- watch history (also stores the resume position) ----
+  function findHist(id) {
+    for (var i = 0; i < history.length; i++) if (history[i].id === id) return history[i];
+    return null;
+  }
+  function remember(id, v) {
+    var old = findHist(id);
+    history = history.filter(function (h) { return h.id !== id; });
+    history.unshift({ id: id, title: v.title, author: v.author, thumb: v.thumb, dur: v.dur, pos: old ? old.pos : 0 });
+    if (history.length > HISTORY_MAX) history.length = HISTORY_MAX;
+    save('history', history);
+  }
+  function savePos(id, t) {
+    var h = findHist(id);
+    if (h) { h.pos = t; save('history', history); }
+  }
 
   // Each backend turns its own JSON into the same shapes:
-  // item  = {id, title, author, avatar, thumb, live, dur, views, when}
-  // video = {title, author, avatar, subs, views, when, thumb, src, related}
+  // item  = {id, title, author, avatar, thumb, live, short, dur, views, when}
+  // video = {title, author, channel, avatar, subs, views, when, thumb, dur, src, related}
+  // chan  = {name, avatar, subs, items}
   var BACKENDS = {
     piped: {
-      home: '/trending?region=VN',
+      home: function () { return '/trending?region=' + prefs.region; },
       search: function (q) { return '/search?filter=videos&q=' + q; },
       video: function (id) { return '/streams/' + encodeURIComponent(id); },
+      channel: function (id) { return '/channel/' + encodeURIComponent(id); },
       items: function (list) {
         return (list || []).filter(function (x) { return !x.type || x.type === 'stream'; }).map(function (x) {
           return {
             id: (x.url || '').split('v=')[1], title: x.title, author: x.uploaderName, avatar: x.uploaderAvatar,
-            thumb: x.thumbnail, live: x.duration < 0, dur: x.duration,
-            views: x.views >= 0 ? num(x.views) + ' lượt xem' : '', when: x.uploadedDate
+            thumb: x.thumbnail, live: x.duration < 0, short: x.isShort, dur: x.duration,
+            channel: channelId(x.uploaderUrl), views: x.views >= 0 ? num(x.views) + ' lượt xem' : '', when: x.uploadedDate
           };
         });
       },
@@ -135,22 +200,30 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
         var mux = (d.videoStreams || []).filter(function (f) { return !f.videoOnly && /mp4/.test(f.mimeType); });
         var best = mux.filter(function (f) { return f.itag === 18; })[0] || mux[0];
         return {
-          title: d.title, author: d.uploader, avatar: d.uploaderAvatar, thumb: d.thumbnailUrl,
+          title: d.title, author: d.uploader, channel: channelId(d.uploaderUrl), avatar: d.uploaderAvatar,
+          thumb: d.thumbnailUrl, dur: d.duration,
           subs: d.uploaderSubscriberCount > 0 ? num(d.uploaderSubscriberCount) + ' người đăng ký' : '',
           views: d.views >= 0 ? num(d.views) + ' lượt xem' : '', when: (d.uploadDate || '').slice(0, 10),
           src: abs(best ? best.url : d.hls || ''), related: this.items(d.relatedStreams)
         };
+      },
+      chan: function (d) {
+        return {
+          name: d.name, avatar: d.avatarUrl, items: this.items(d.relatedStreams),
+          subs: d.subscriberCount > 0 ? num(d.subscriberCount) + ' người đăng ký' : ''
+        };
       }
     },
     invidious: {
-      home: '/api/v1/trending?region=VN',
+      home: function () { return '/api/v1/trending?region=' + prefs.region; },
       search: function (q) { return '/api/v1/search?type=video&q=' + q; },
       // local=true asks the server to proxy the video, because Google's links only work from the server's IP.
       video: function (id) { return '/api/v1/videos/' + encodeURIComponent(id) + '?local=true'; },
+      channel: function (id) { return '/api/v1/channels/' + encodeURIComponent(id); },
       items: function (list) {
         return (list || []).filter(function (x) { return x.videoId && (!x.type || x.type === 'video'); }).map(function (x) {
           return {
-            id: x.videoId, title: x.title, author: x.author, avatar: first(x.authorThumbnails),
+            id: x.videoId, title: x.title, author: x.author, avatar: first(x.authorThumbnails), channel: x.authorId,
             thumb: S().url + '/vi/' + encodeURIComponent(x.videoId) + '/mqdefault.jpg', live: x.liveNow, dur: x.lengthSeconds,
             views: x.viewCountText || (x.viewCount != null ? num(x.viewCount) + ' lượt xem' : ''), when: x.publishedText
           };
@@ -160,10 +233,16 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       watch: function (d) {
         var mux = (d.formatStreams || []).filter(function (f) { return /^video\/mp4/.test(f.type); });
         return {
-          title: d.title, author: d.author, avatar: first(d.authorThumbnails), subs: d.subCountText,
-          thumb: first(d.videoThumbnails), views: d.viewCount != null ? num(d.viewCount) + ' lượt xem' : '',
+          title: d.title, author: d.author, channel: d.authorId, avatar: first(d.authorThumbnails), subs: d.subCountText,
+          thumb: first(d.videoThumbnails), dur: d.lengthSeconds, views: d.viewCount != null ? num(d.viewCount) + ' lượt xem' : '',
           when: d.publishedText, related: this.items(d.recommendedVideos),
           src: abs(mux.length ? mux[mux.length - 1].url : d.liveNow && d.hlsUrl ? d.hlsUrl : '')
+        };
+      },
+      chan: function (d) {
+        return {
+          name: d.author, avatar: first((d.authorThumbnails || []).slice(-1)), items: this.items(d.latestVideos),
+          subs: d.subCount > 0 ? num(d.subCount) + ' người đăng ký' : ''
         };
       }
     }
@@ -177,74 +256,185 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     document.getElementById('retry').onclick = route;
     document.getElementById('swap').onclick = nextServer;
   }
-  function get(path, ok) {
-    var my = seq, x = new XMLHttpRequest();
-    x.open('GET', S().url + path);
+  function request(url, ok, fail) {
+    var x = new XMLHttpRequest();
+    x.open('GET', url);
     x.timeout = 20000;
     x.onload = function () {
-      if (my !== seq) return;
       var data = null;
       try { data = JSON.parse(x.responseText); } catch (e) {}
-      if (x.status === 200 && data && !data.error) ok(data); else problem('Server không trả được dữ liệu.');
+      if (x.status === 200 && data && !data.error) ok(data); else fail(x.status);
     };
-    x.onerror = x.ontimeout = function () { if (my === seq) problem('Không kết nối được server.'); };
+    x.onerror = x.ontimeout = function () { fail(0); };
     x.send();
+  }
+  function get(path, ok) {
+    var my = seq;
+    request(S().url + path, function (d) { if (my === seq) ok(d); }, function (status) {
+      if (my === seq) problem(status ? 'Server không trả được dữ liệu.' : 'Không kết nối được server.');
+    });
   }
 
   function card(v, compact) {
     if (!v.id) return '';
-    var id = encodeURIComponent(v.id);
+    var id = encodeURIComponent(v.id), h = findHist(v.id);
     var dur = v.live ? '<span class="dur live">TRỰC TIẾP</span>' : v.dur > 0 ? '<span class="dur">' + time(v.dur) + '</span>' : '';
+    var bar = h && h.pos > 0 && v.dur > 0 ? '<span class="bar" style="width:' + Math.min(100, Math.round(h.pos / v.dur * 100)) + '%"></span>' : '';
     var av = compact ? '' : safeUrl(v.avatar);
     return '<a class="card' + (compact ? ' compact' : '') + '" href="#/watch/' + id + '">' +
-      '<div class="thumb"><img src="' + safeUrl(v.thumb) + '" alt="">' + dur + '</div>' +
+      '<div class="thumb"><img src="' + safeUrl(v.thumb) + '" alt="">' + dur + bar + '</div>' +
       '<div class="info">' + (av ? '<img class="av" src="' + av + '" alt="">' : '') +
       '<div><h3>' + esc(v.title) + '</h3><p>' + line([v.author, v.views, v.when]) + '</p></div></div></a>';
+  }
+  function cards(items, compact) {
+    return items.filter(function (v) { return !(prefs.hideShorts && v.short); })
+      .map(function (v) { return card(v, compact); }).join('');
   }
 
   function list(path) {
     app.innerHTML = '<p class="msg">Đang tải…</p>';
     get(path, function (d) {
-      var html = B().list(d).map(function (v) { return card(v); }).join('');
+      var html = cards(B().list(d));
       app.innerHTML = html ? '<div class="grid">' + html + '</div>' : '<p class="msg">Không có kết quả.</p>';
     });
   }
 
-  function watch(id) {
-    app.innerHTML = '<p class="msg">Đang tải…</p>';
+  function sponsorSegments(id, ok) {
+    request('https://sponsor.ajay.app/api/skipSegments?videoID=' + encodeURIComponent(id) +
+      '&categories=' + encodeURIComponent(SPONSOR_CATS), function (d) {
+      ok(d.map(function (s) { return s.segment; }));
+    }, function () {}); // 404 means nobody marked a sponsor segment in this video
+  }
+
+  function watch(id, auto) {
+    var vid = auto ? document.getElementById('vid') : null;
+    if (!vid) {
+      app.innerHTML = '<div class="player" id="player"><video id="vid" controls playsinline webkit-playsinline preload="metadata"></video></div>' +
+        '<div id="info"><p class="msg">Đang tải…</p></div>';
+      vid = document.getElementById('vid');
+    } else {
+      document.getElementById('info').innerHTML = '<p class="msg">Đang tải…</p>';
+    }
+    var box = document.getElementById('player'), info = document.getElementById('info');
+    var segs = [], resumed = false, lastSave = 0, my = seq;
+    nextId = null;
+
+    vid.onplaying = function () {
+      vid.playbackRate = prefs.speed;
+      if (resumed) return;
+      resumed = true;
+      var h = findHist(id), p = h ? h.pos : 0;
+      if (prefs.resume && p > 5 && (!vid.duration || p < vid.duration - 10)) { vid.currentTime = p; toast('Xem tiếp từ ' + time(p)); }
+    };
+    vid.ontimeupdate = function () {
+      var t = vid.currentTime;
+      for (var i = 0; i < segs.length; i++) {
+        if (t >= segs[i][0] && t < segs[i][1] - 0.5) { vid.currentTime = segs[i][1]; toast('Đã bỏ qua đoạn quảng cáo tài trợ'); return; }
+      }
+      if (Math.abs(t - lastSave) > 5) { lastSave = t; savePos(id, t); }
+    };
+    vid.onpause = function () { if (!vid.ended) savePos(id, vid.currentTime); };
+    vid.onended = function () {
+      savePos(id, 0);
+      if (prefs.autoplay && nextId) { autoNext = true; location.hash = '#/watch/' + encodeURIComponent(nextId); }
+    };
+    vid.onerror = function () { problem('Không phát được video (lỗi ' + (vid.error ? vid.error.code : '?') + ').', box); };
+
     get(B().video(id), function (d) {
       var v = B().watch(d), av = safeUrl(v.avatar);
-      app.innerHTML =
-        '<div class="player" id="player"><video id="vid" controls playsinline webkit-playsinline preload="metadata"></video></div>' +
+      var rel = v.related.filter(function (r) { return !(prefs.hideShorts && r.short); });
+      nextId = rel[0] ? rel[0].id : null;
+      remember(id, v);
+      info.innerHTML =
         '<div class="meta"><h1>' + esc(v.title) + '</h1><p>' + line([v.views, v.when]) + '</p>' +
-        '<div class="chan">' + (av ? '<img class="av" src="' + av + '" alt="">' : '') +
-        '<b>' + esc(v.author) + '</b><span>' + esc(v.subs) + '</span></div></div>' +
-        (v.related.length ? '<h2 class="next">Video tiếp theo</h2><div class="grid">' +
-          v.related.map(function (r) { return card(r, true); }).join('') + '</div>' : '');
-      var vid = document.getElementById('vid'), box = document.getElementById('player');
+        '<a class="chan"' + (v.channel ? ' href="#/channel/' + encodeURIComponent(v.channel) + '"' : '') + '>' +
+        (av ? '<img class="av" src="' + av + '" alt="">' : '') + '<b>' + esc(v.author) + '</b><span>' + esc(v.subs) + '</span></a>' +
+        '<div class="tools">Tốc độ<select id="speed">' + SPEEDS.map(function (s) {
+          return '<option value="' + s + '"' + (s === prefs.speed ? ' selected' : '') + '>' + s + 'x</option>';
+        }).join('') + '</select></div></div>' +
+        (rel.length ? '<h2 class="next">Video tiếp theo<small>' + (prefs.autoplay ? 'Tự phát: bật' : 'Tự phát: tắt') + '</small></h2>' +
+          '<div class="grid">' + cards(rel, true) + '</div>' : '');
+      document.getElementById('speed').onchange = function () {
+        prefs.speed = +this.value; save('prefs', prefs); vid.playbackRate = prefs.speed;
+      };
       if (!v.src) return problem('Server này không có bản video máy cũ phát được.', box);
       if (safeUrl(v.thumb)) vid.poster = v.thumb;
-      vid.onerror = function () { problem('Không phát được video (lỗi ' + (vid.error ? vid.error.code : '?') + ').', box); };
       vid.src = v.src;
+      // The player was started by a tap earlier, so iOS lets it continue with the next video.
+      if (auto) vid.play();
+      if (prefs.sponsor) sponsorSegments(id, function (s) { if (my === seq) segs = s; });
     });
   }
 
+  function channel(id) {
+    app.innerHTML = '<p class="msg">Đang tải…</p>';
+    get(B().channel(id), function (d) {
+      var c = B().chan(d), av = safeUrl(c.avatar);
+      function show(items) {
+        var html = cards(items);
+        app.innerHTML = '<div class="chead">' + (av ? '<img src="' + av + '" alt="">' : '') +
+          '<div><h1>' + esc(c.name) + '</h1><p>' + esc(c.subs) + '</p></div></div>' +
+          (html ? '<div class="grid">' + html + '</div>' : '<p class="msg">Không lấy được video của kênh.</p>');
+      }
+      if (c.items.length) return show(c.items);
+      // Piped often returns no channel videos now: search the channel name and keep only its own videos.
+      get(B().search(encodeURIComponent(c.name || '')), function (r) {
+        show(B().list(r).filter(function (v) { return v.channel === id; }));
+      });
+    });
+  }
+
+  function historyPage() {
+    app.innerHTML = '<div class="page"><h1>Lịch sử xem</h1>' + (history.length ? '' : '<p class="hint">Chưa xem video nào.</p>') + '</div>' +
+      (history.length ? '<div class="grid">' + cards(history, true) + '</div>' : '');
+  }
+
   function settings() {
+    function check(key, text) {
+      return '<div class="row"><label for="p-' + key + '">' + text + '</label>' +
+        '<input type="checkbox" id="p-' + key + '" data-pref="' + key + '"' + (prefs[key] ? ' checked' : '') + '></div>';
+    }
+    function choose(key, text, options) {
+      var html = '';
+      for (var v in options) html += '<option value="' + esc(v) + '"' + (String(prefs[key]) === v ? ' selected' : '') + '>' + esc(options[v]) + '</option>';
+      return '<div class="row"><label for="p-' + key + '">' + text + '</label><select id="p-' + key + '" data-pref="' + key + '">' + html + '</select></div>';
+    }
+    var speeds = {};
+    SPEEDS.forEach(function (s) { speeds[s] = s === 1 ? 'Chuẩn' : s + 'x'; });
     var rows = servers.map(function (s, i) {
-      return '<div class="srv"><label><input type="radio" name="srv" value="' + i + '"' + (i === cur ? ' checked' : '') + '>' +
+      return '<div class="row srv"><label><input type="radio" name="srv" value="' + i + '"' + (i === cur ? ' checked' : '') + '>' +
         esc(s.url) + ' <small>' + esc(s.type) + '</small></label>' +
         (servers.length > 1 ? '<button class="btn" data-del="' + i + '">Xóa</button>' : '') + '</div>';
     }).join('');
-    app.innerHTML = '<div class="set"><h1>Chọn server</h1>' + rows +
+    app.innerHTML = '<div class="page"><h1>Cài đặt</h1>' +
+      '<h2>Phát video</h2>' +
+      check('autoplay', 'Tự động phát video tiếp theo') +
+      check('resume', 'Xem tiếp từ chỗ đã dừng') +
+      check('sponsor', 'Tự bỏ qua đoạn quảng cáo tài trợ trong video (SponsorBlock)') +
+      choose('speed', 'Tốc độ phát mặc định', speeds) +
+      '<h2>Nội dung</h2>' +
+      choose('region', 'Khu vực thịnh hành', REGIONS) +
+      check('hideShorts', 'Ẩn video Shorts') +
+      '<h2>Giao diện</h2>' +
+      choose('theme', 'Chủ đề', { dark: 'Tối', light: 'Sáng' }) +
+      '<h2>Lịch sử</h2>' +
+      '<div class="row"><label>Đã lưu ' + history.length + ' video</label><button class="btn" id="clear">Xóa lịch sử</button></div>' +
+      '<h2>Server</h2>' + rows +
       '<form id="add"><select id="nt"><option value="piped">Piped</option><option value="invidious">Invidious</option></select>' +
       '<input id="nu" type="url" placeholder="https://api.example.com" autocapitalize="off" autocorrect="off">' +
       '<button class="btn">Thêm</button></form>' +
       '<p class="hint">Với Piped, nhập địa chỉ API (thường bắt đầu bằng pipedapi. hoặc api.). ' +
       'Piped thường phát được trên máy cũ, Invidious thường chỉ xem được danh sách. ' +
       'Server công cộng hay hỏng: khi lỗi, bấm "Đổi server".</p>' +
-      '<button class="btn" id="reset">Khôi phục danh sách mặc định</button></div>';
+      '<button class="btn" id="reset">Khôi phục danh sách server mặc định</button></div>';
+
     app.onchange = function (e) {
-      if (e.target.name === 'srv') { cur = +e.target.value; persist(); }
+      var t = e.target, key = t.getAttribute('data-pref');
+      if (t.name === 'srv') { cur = +t.value; persist(); return; }
+      if (!key) return;
+      prefs[key] = t.type === 'checkbox' ? t.checked : key === 'speed' ? +t.value : t.value;
+      save('prefs', prefs);
+      if (key === 'theme') applyTheme();
     };
     app.onclick = function (e) {
       var i = e.target.getAttribute('data-del');
@@ -252,6 +442,9 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       servers.splice(+i, 1);
       if (cur >= servers.length || cur === +i) cur = 0; else if (cur > +i) cur--;
       persist(); settings();
+    };
+    document.getElementById('clear').onclick = function () {
+      if (confirm('Xóa toàn bộ lịch sử xem?')) { history = []; save('history', history); settings(); }
     };
     document.getElementById('reset').onclick = function () { servers = DEFAULTS.slice(); cur = 0; persist(); settings(); };
     document.getElementById('add').onsubmit = function (e) {
@@ -267,13 +460,19 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   function route() {
     seq++;
     app.onchange = app.onclick = null;
-    var old = document.getElementById('vid');
-    if (old) { old.pause(); old.removeAttribute('src'); old.load(); }
+    var auto = autoNext;
+    autoNext = false;
     var h = location.hash.replace(/^#\/?/, '').split('/');
+    var old = document.getElementById('vid');
+    if (old && !(auto && h[0] === 'watch')) { old.pause(); old.removeAttribute('src'); old.load(); }
+    var tab = h[0] === 'history' || h[0] === 'settings' ? h[0] : h[0] ? '' : 'home';
+    ['home', 'history', 'settings'].forEach(function (n) { document.getElementById('n-' + n).className = n === tab ? 'on' : ''; });
     if (h[0] === 'settings') settings();
-    else if (h[0] === 'watch' && h[1]) watch(decodeURIComponent(h[1]));
+    else if (h[0] === 'history') historyPage();
+    else if (h[0] === 'watch' && h[1]) watch(decodeURIComponent(h[1]), auto);
+    else if (h[0] === 'channel' && h[1]) channel(decodeURIComponent(h[1]));
     else if (h[0] === 'search' && h[1]) { q.value = decodeURIComponent(h[1]); list(B().search(h[1])); }
-    else list(B().home);
+    else list(B().home());
     window.scrollTo(0, 0);
   }
 
