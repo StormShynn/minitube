@@ -1,14 +1,20 @@
 """MiniTube local server: serves index.html plus a tiny Piped-compatible API backed by yt-dlp.
 
-Run:  python server.py   then open the printed http://<PC-IP>:8000 address in Safari on the iPhone.
-Away from home: also run  cloudflared tunnel --url http://localhost:8000  and open the https://...trycloudflare.com
-address it prints. Video goes through this PC, because YouTube's links only work from the IP that asked for them.
+Run:  python server.py  (or double-click run.bat). It prints two addresses for Safari on the iPhone:
+- same Wi-Fi: http://<PC-IP>:8000
+- anywhere (4G): https://....trycloudflare.com, when cloudflared is installed (winget install Cloudflare.cloudflared).
+  That address is new on every start. Through it, video goes through this PC, because YouTube's links
+  only work from the IP that asked for them.
 """
+import atexit
 import http.client
 import ipaddress
 import json
 import re
+import shutil
 import socket
+import subprocess
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -95,6 +101,10 @@ def streams(vid, direct):
 
 
 class Handler(SimpleHTTPRequestHandler):
+    # Keep-alive: cloudflared reuses connections, and HTTP/1.0 closes each one, which made tunnel requests fail.
+    # Safe because every response here sends Content-Length.
+    protocol_version = 'HTTP/1.1'
+
     def __init__(self, *a, **k):
         super().__init__(*a, directory=str(ROOT), **k)
 
@@ -174,6 +184,32 @@ def lan_ip():
         return s.getsockname()[0]
 
 
+CLOUDFLARED = [r'C:\Program Files (x86)\cloudflared\cloudflared.exe', r'C:\Program Files\cloudflared\cloudflared.exe']
+
+
+def start_tunnel(ip):
+    """Free Cloudflare quick tunnel (no account): gives this server a public https address for 4G."""
+    exe = shutil.which('cloudflared') or next((p for p in CLOUDFLARED if Path(p).exists()), None)
+    if not exe:
+        print('Chưa cài cloudflared nên chỉ xem được khi cùng Wi-Fi. Cài: winget install Cloudflare.cloudflared')
+        return
+    # The tunnel targets the LAN address, not localhost: on some PCs security software cuts large localhost transfers.
+    p = subprocess.Popen([exe, 'tunnel', '--no-autoupdate', '--url', f'http://{ip}:{PORT}'],
+                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
+    atexit.register(p.terminate)
+
+    def show_address():  # keep reading, or cloudflared blocks once its output pipe is full
+        shown = False
+        for line in p.stdout:
+            m = re.search(r'https://[a-z0-9-]+\.trycloudflare\.com', line)
+            if m and not shown:
+                shown = True
+                print(f'MiniTube: xem ở mọi nơi, kể cả 4G:   {m.group(0)}', flush=True)
+    threading.Thread(target=show_address, daemon=True).start()
+
+
 if __name__ == '__main__':
-    print(f'MiniTube: mở trên iPhone (cùng Wi-Fi): http://{lan_ip()}:{PORT}')
+    ip = lan_ip()
+    print(f'MiniTube: xem khi cùng Wi-Fi:          http://{ip}:{PORT}', flush=True)
+    start_tunnel(ip)
     ThreadingHTTPServer(('0.0.0.0', PORT), Handler).serve_forever()
