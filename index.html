@@ -10,18 +10,21 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:#0f0f0f;color:#f1f1f1;font:14px/1.4 -apple-system,Helvetica,Arial,sans-serif;-webkit-text-size-adjust:100%}
 a{color:inherit;text-decoration:none}
+button,select,input{font:inherit;color:#fff}
 header{position:-webkit-sticky;position:sticky;top:0;z-index:2;display:flex;align-items:center;height:48px;padding:0 12px;background:#0f0f0f;border-bottom:1px solid #222}
 .logo{display:flex;align-items:center;font-weight:700;font-size:17px;letter-spacing:-.5px;margin-right:12px;white-space:nowrap}
 .tri{display:inline-block;border-style:solid;border-width:5px 0 5px 9px;border-color:transparent transparent transparent #fff}
 .logo b{display:flex;align-items:center;justify-content:center;width:28px;height:20px;border-radius:6px;background:#f00;margin-right:4px}
 #sf{flex:1}
-#q{width:100%;height:34px;padding:0 14px;border:1px solid #303030;border-radius:17px;background:#121212;color:#fff;font-size:16px;-webkit-appearance:none}
+#q{width:100%;height:34px;padding:0 14px;border:1px solid #303030;border-radius:17px;background:#121212;font-size:16px;-webkit-appearance:none}
+.gear{display:flex;align-items:center;justify-content:center;width:36px;height:36px;margin-left:6px}
 .grid{display:flex;flex-wrap:wrap;padding-bottom:16px}
 .card{display:block;width:100%;margin-bottom:16px}
 @media (min-width:600px){.card{width:50%;padding:0 8px}}
 .thumb{position:relative;padding-top:56.25%;background:#222;overflow:hidden}
 .thumb img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
 .dur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);padding:1px 4px;border-radius:4px;font-size:12px;font-weight:600}
+.dur.live{background:#c00}
 .info{display:flex;padding:10px 12px 0}
 .av{width:36px;height:36px;border-radius:50%;margin-right:12px;flex:none;background:#333}
 h3{font-size:15px;font-weight:500;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
@@ -32,41 +35,67 @@ h3{font-size:15px;font-weight:500;display:-webkit-box;-webkit-line-clamp:2;-webk
 .compact h3{font-size:14px}
 .player{position:relative;padding-top:56.25%;background:#000}
 .player video{position:absolute;top:0;left:0;width:100%;height:100%}
-.big{position:absolute;left:50%;top:50%;width:68px;height:48px;margin:-24px 0 0 -34px;border:0;border-radius:12px;background:#f00}
-.big .tri{border-width:9px 0 9px 15px;margin-left:4px}
-.player .msg{position:absolute;top:35%;width:100%}
+.player .msg{position:absolute;top:20%;width:100%}
 .meta{padding:12px}
 h1{font-size:18px;font-weight:600;line-height:1.3}
 .chan{display:flex;align-items:center;margin-top:12px}
 .chan span{color:#aaa;font-size:12px;margin-left:8px}
 .next{font-size:16px;padding:4px 12px 12px}
 .msg{padding:32px 16px;text-align:center;color:#aaa}
-.msg button{margin-top:12px;padding:8px 16px;border:0;border-radius:18px;background:#272727;color:#fff;font-size:14px}
+.btn{margin:12px 4px 0;padding:8px 16px;border:0;border-radius:18px;background:#272727;font-size:14px}
+.set{padding:16px 12px}
+.set h1{margin-bottom:12px}
+.srv{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid #222}
+.srv label{flex:1;word-break:break-all}
+.srv input{margin-right:10px}
+.srv small{color:#aaa}
+.srv .btn{margin:0 0 0 8px}
+#add{display:flex;margin-top:16px}
+#add select,#add input{height:36px;border:1px solid #303030;border-radius:8px;background:#121212;padding:0 8px;font-size:16px}
+#add input{flex:1;min-width:0;margin:0 6px}
+#add .btn{margin:0}
+.hint{color:#aaa;font-size:12px;margin-top:16px}
 </style>
 </head>
 <body>
 <header>
   <a href="#" class="logo"><b><i class="tri"></i></b>MiniTube</a>
   <form id="sf"><input id="q" type="search" placeholder="Tìm kiếm" autocomplete="off"></form>
+  <a href="#/settings" class="gear" aria-label="Chọn server"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg></a>
 </header>
 <main id="app"></main>
 <script>
 // ES5 + XHR only: must run on Safari of iOS 10.
 (function () {
   'use strict';
-  // shortcut: one hard-coded public Invidious instance; when it stops working, pick another from
-  // https://raw.githubusercontent.com/iv-org/documentation/master/docs/instances.md
-  var API = 'https://yt.chocolatemoo53.com';
+  // Piped first: it serves itag 18 (one mp4 with picture + sound) through its proxy, which old iOS can play.
+  // Update this list from https://github.com/TeamPiped/documentation (public-instances) and
+  // https://github.com/iv-org/documentation (instances.md) when servers die.
+  var DEFAULTS = [
+    { type: 'piped', url: 'https://api.piped.private.coffee' },
+    { type: 'piped', url: 'https://pipedapi.kavin.rocks' },
+    { type: 'invidious', url: 'https://yt.chocolatemoo53.com' },
+    { type: 'invidious', url: 'https://invidious.nerdvpn.de' }
+  ];
   var app = document.getElementById('app');
   var q = document.getElementById('q');
-  var seq = 0;        // bumps on every navigation, so a slow old response cannot overwrite the new page
-  var stopPlayer = null;
+  var seq = 0; // bumps on every navigation, so a slow old response cannot overwrite the new page
+
+  // localStorage throws in Safari private mode, so failures fall back to defaults.
+  function load(k, d) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }
+  function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  var servers = load('servers', DEFAULTS);
+  var cur = load('cur', 0);
+  if (!servers.length) servers = DEFAULTS;
+  if (!servers[cur]) cur = 0;
+  function S() { return servers[cur]; }
+  function persist() { save('servers', servers); save('cur', cur); }
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; });
   }
   function safeUrl(u) { return /^(https?:)?\/\//.test(u || '') ? esc(u) : ''; }
-
+  function abs(u) { return u && u.charAt(0) === '/' && u.charAt(1) !== '/' ? S().url + u : u; }
   function num(n) {
     n = +n || 0;
     function f(x, u) { return x.toFixed(1).replace(/\.0$/, '') + u; }
@@ -77,109 +106,170 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     var h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), x = s % 60;
     return (h ? h + ':' + (m < 10 ? '0' : '') : '') + m + ':' + (x < 10 ? '0' : '') + x;
   }
-  function views(v) {
-    return v.viewCountText || (v.viewCount != null ? num(v.viewCount) + ' lượt xem' : '');
-  }
   function line(parts) { return parts.filter(Boolean).map(esc).join(' · '); }
+  function first(a) { return a && a[0] ? a[0].url : ''; }
 
-  function fail() {
-    app.innerHTML = '<div class="msg">Không tải được. Server có thể đang lỗi.<br><button id="retry">Thử lại</button></div>';
+  // Each backend turns its own JSON into the same shapes:
+  // item  = {id, title, author, avatar, thumb, live, dur, views, when}
+  // video = {title, author, avatar, subs, views, when, thumb, src, related}
+  var BACKENDS = {
+    piped: {
+      home: '/trending?region=VN',
+      search: function (q) { return '/search?filter=videos&q=' + q; },
+      video: function (id) { return '/streams/' + encodeURIComponent(id); },
+      items: function (list) {
+        return (list || []).filter(function (x) { return !x.type || x.type === 'stream'; }).map(function (x) {
+          return {
+            id: (x.url || '').split('v=')[1], title: x.title, author: x.uploaderName, avatar: x.uploaderAvatar,
+            thumb: x.thumbnail, live: x.duration < 0, dur: x.duration,
+            views: x.views >= 0 ? num(x.views) + ' lượt xem' : '', when: x.uploadedDate
+          };
+        });
+      },
+      list: function (d) { return this.items(d.items || d); },
+      watch: function (d) {
+        var mux = (d.videoStreams || []).filter(function (f) { return !f.videoOnly && /mp4/.test(f.mimeType); });
+        var best = mux.filter(function (f) { return f.itag === 18; })[0] || mux[0];
+        return {
+          title: d.title, author: d.uploader, avatar: d.uploaderAvatar, thumb: d.thumbnailUrl,
+          subs: d.uploaderSubscriberCount > 0 ? num(d.uploaderSubscriberCount) + ' người đăng ký' : '',
+          views: d.views >= 0 ? num(d.views) + ' lượt xem' : '', when: (d.uploadDate || '').slice(0, 10),
+          src: best ? best.url : d.livestream && d.hls ? d.hls : '', related: this.items(d.relatedStreams)
+        };
+      }
+    },
+    invidious: {
+      home: '/api/v1/trending?region=VN',
+      search: function (q) { return '/api/v1/search?type=video&q=' + q; },
+      // local=true asks the server to proxy the video, because Google's links only work from the server's IP.
+      video: function (id) { return '/api/v1/videos/' + encodeURIComponent(id) + '?local=true'; },
+      items: function (list) {
+        return (list || []).filter(function (x) { return x.videoId && (!x.type || x.type === 'video'); }).map(function (x) {
+          return {
+            id: x.videoId, title: x.title, author: x.author, avatar: first(x.authorThumbnails),
+            thumb: S().url + '/vi/' + encodeURIComponent(x.videoId) + '/mqdefault.jpg', live: x.liveNow, dur: x.lengthSeconds,
+            views: x.viewCountText || (x.viewCount != null ? num(x.viewCount) + ' lượt xem' : ''), when: x.publishedText
+          };
+        });
+      },
+      list: function (d) { return this.items(d); },
+      watch: function (d) {
+        var mux = (d.formatStreams || []).filter(function (f) { return /^video\/mp4/.test(f.type); });
+        return {
+          title: d.title, author: d.author, avatar: first(d.authorThumbnails), subs: d.subCountText,
+          thumb: first(d.videoThumbnails), views: d.viewCount != null ? num(d.viewCount) + ' lượt xem' : '',
+          when: d.publishedText, related: this.items(d.recommendedVideos),
+          src: abs(mux.length ? mux[mux.length - 1].url : d.liveNow && d.hlsUrl ? d.hlsUrl : '')
+        };
+      }
+    }
+  };
+  function B() { return BACKENDS[S().type] || BACKENDS.piped; }
+
+  function nextServer() { cur = (cur + 1) % servers.length; persist(); route(); }
+  function problem(text, where) {
+    (where || app).innerHTML = '<div class="msg">' + esc(text) + '<br><small>' + esc(S().url) + '</small><br>' +
+      '<button class="btn" id="retry">Thử lại</button><button class="btn" id="swap">Đổi server</button></div>';
     document.getElementById('retry').onclick = route;
+    document.getElementById('swap').onclick = nextServer;
   }
   function get(path, ok) {
     var my = seq, x = new XMLHttpRequest();
-    x.open('GET', API + path);
+    x.open('GET', S().url + path);
     x.timeout = 20000;
     x.onload = function () {
       if (my !== seq) return;
       var data = null;
       try { data = JSON.parse(x.responseText); } catch (e) {}
-      if (x.status === 200 && data) ok(data); else fail();
+      if (x.status === 200 && data && !data.error) ok(data); else problem('Server không trả được dữ liệu.');
     };
-    x.onerror = x.ontimeout = function () { if (my === seq) fail(); };
+    x.onerror = x.ontimeout = function () { if (my === seq) problem('Không kết nối được server.'); };
     x.send();
   }
 
   function card(v, compact) {
-    if (!v || !v.videoId || (v.type && v.type !== 'video')) return '';
-    var id = encodeURIComponent(v.videoId);
-    var dur = v.liveNow ? 'TRỰC TIẾP' : v.lengthSeconds ? time(v.lengthSeconds) : '';
-    var av = !compact && v.authorThumbnails && v.authorThumbnails[0] ? safeUrl(v.authorThumbnails[0].url) : '';
+    if (!v.id) return '';
+    var id = encodeURIComponent(v.id);
+    var dur = v.live ? '<span class="dur live">TRỰC TIẾP</span>' : v.dur > 0 ? '<span class="dur">' + time(v.dur) + '</span>' : '';
+    var av = compact ? '' : safeUrl(v.avatar);
     return '<a class="card' + (compact ? ' compact' : '') + '" href="#/watch/' + id + '">' +
-      '<div class="thumb"><img src="' + API + '/vi/' + id + '/mqdefault.jpg" alt="">' +
-      (dur ? '<span class="dur">' + esc(dur) + '</span>' : '') + '</div>' +
+      '<div class="thumb"><img src="' + safeUrl(v.thumb) + '" alt="">' + dur + '</div>' +
       '<div class="info">' + (av ? '<img class="av" src="' + av + '" alt="">' : '') +
-      '<div><h3>' + esc(v.title) + '</h3><p>' + line([v.author, views(v), v.publishedText]) + '</p></div></div></a>';
+      '<div><h3>' + esc(v.title) + '</h3><p>' + line([v.author, v.views, v.when]) + '</p></div></div></a>';
   }
 
   function list(path) {
     app.innerHTML = '<p class="msg">Đang tải…</p>';
-    get(path, function (items) {
-      var html = (items || []).map(function (v) { return card(v); }).join('');
+    get(path, function (d) {
+      var html = B().list(d).map(function (v) { return card(v); }).join('');
       app.innerHTML = html ? '<div class="grid">' + html + '</div>' : '<p class="msg">Không có kết quả.</p>';
     });
   }
 
-  function res(f) { return parseInt(f.resolution, 10) || 0; }
-  // Returns {src} for one file that has picture and sound, {src, audio} for separate files, or null.
-  function pick(v) {
-    var muxed = (v.formatStreams || []).filter(function (f) { return /^video\/mp4/.test(f.type); });
-    if (muxed.length) return { src: muxed[muxed.length - 1].url };
-    if (v.liveNow && v.hlsUrl) return { src: v.hlsUrl };
-    var ad = v.adaptiveFormats || [];
-    var vid = ad.filter(function (f) { return /^video\/mp4.*avc1/.test(f.type) && res(f) <= 360; })
-      .sort(function (a, b) { return res(b) - res(a); })[0];
-    var aud = ad.filter(function (f) { return /^audio\/mp4.*mp4a\.40\.2/.test(f.type); })[0];
-    return vid && aud ? { src: vid.url, audio: aud.url } : null;
-  }
-
-  function play(s) {
-    var vid = document.getElementById('vid'), aud = document.getElementById('aud'), big = document.getElementById('big');
-    vid.src = s.src;
-    stopPlayer = function () { vid.pause(); if (aud) { aud.pause(); aud.removeAttribute('src'); aud.load(); } };
-    // Start both inside the tap: iOS only lets media start from a user gesture.
-    big.onclick = function () {
-      big.style.display = 'none';
-      if (aud) aud.play();
-      vid.play();
-    };
-    if (!aud) return;
-    // shortcut: picture and sound are separate files (YouTube stopped serving muxed mp4). Sound follows the
-    // picture's clock and is snapped back when it drifts more than 0.3 s; switch to a muxed source if one appears.
-    aud.src = s.audio;
-    function sync() { if (Math.abs(aud.currentTime - vid.currentTime) > 0.3) aud.currentTime = vid.currentTime; }
-    vid.onplaying = function () { sync(); aud.play(); };
-    vid.onpause = vid.onwaiting = function () { aud.pause(); };
-    vid.onseeked = vid.ontimeupdate = sync;
-  }
-
   function watch(id) {
     app.innerHTML = '<p class="msg">Đang tải…</p>';
-    get('/api/v1/videos/' + encodeURIComponent(id), function (v) {
-      var s = pick(v), eid = encodeURIComponent(id);
-      var av = v.authorThumbnails && v.authorThumbnails[0] ? safeUrl(v.authorThumbnails[0].url) : '';
+    get(B().video(id), function (d) {
+      var v = B().watch(d), av = safeUrl(v.avatar);
       app.innerHTML =
-        '<div class="player"><video id="vid" controls playsinline webkit-playsinline preload="none"' +
-        (s && s.audio ? ' muted' : '') + ' poster="' + API + '/vi/' + eid + '/hqdefault.jpg"></video>' +
-        (s ? '<button id="big" class="big" aria-label="Phát"><i class="tri"></i></button>' +
-             (s.audio ? '<audio id="aud" preload="none"></audio>' : '')
-           : '<p class="msg">Không phát được video này trên máy này.</p>') + '</div>' +
-        '<div class="meta"><h1>' + esc(v.title) + '</h1><p>' + line([views(v), v.publishedText]) + '</p>' +
+        '<div class="player" id="player"><video id="vid" controls playsinline webkit-playsinline preload="metadata"></video></div>' +
+        '<div class="meta"><h1>' + esc(v.title) + '</h1><p>' + line([v.views, v.when]) + '</p>' +
         '<div class="chan">' + (av ? '<img class="av" src="' + av + '" alt="">' : '') +
-        '<b>' + esc(v.author) + '</b><span>' + esc(v.subCountText) + '</span></div></div>' +
+        '<b>' + esc(v.author) + '</b><span>' + esc(v.subs) + '</span></div></div>' +
         '<h2 class="next">Video tiếp theo</h2><div class="grid">' +
-        (v.recommendedVideos || []).map(function (r) { return card(r, true); }).join('') + '</div>';
-      if (s) play(s);
+        v.related.map(function (r) { return card(r, true); }).join('') + '</div>';
+      var vid = document.getElementById('vid'), box = document.getElementById('player');
+      if (!v.src) return problem('Server này không có bản video máy cũ phát được.', box);
+      if (safeUrl(v.thumb)) vid.poster = v.thumb;
+      vid.onerror = function () { problem('Không phát được video (lỗi ' + (vid.error ? vid.error.code : '?') + ').', box); };
+      vid.src = v.src;
     });
+  }
+
+  function settings() {
+    var rows = servers.map(function (s, i) {
+      return '<div class="srv"><label><input type="radio" name="srv" value="' + i + '"' + (i === cur ? ' checked' : '') + '>' +
+        esc(s.url) + ' <small>' + esc(s.type) + '</small></label>' +
+        (servers.length > 1 ? '<button class="btn" data-del="' + i + '">Xóa</button>' : '') + '</div>';
+    }).join('');
+    app.innerHTML = '<div class="set"><h1>Chọn server</h1>' + rows +
+      '<form id="add"><select id="nt"><option value="piped">Piped</option><option value="invidious">Invidious</option></select>' +
+      '<input id="nu" type="url" placeholder="https://api.example.com" autocapitalize="off" autocorrect="off">' +
+      '<button class="btn">Thêm</button></form>' +
+      '<p class="hint">Với Piped, nhập địa chỉ API (thường bắt đầu bằng pipedapi. hoặc api.). ' +
+      'Piped thường phát được trên máy cũ, Invidious thường chỉ xem được danh sách. ' +
+      'Server công cộng hay hỏng: khi lỗi, bấm "Đổi server".</p>' +
+      '<button class="btn" id="reset">Khôi phục danh sách mặc định</button></div>';
+    app.onchange = function (e) {
+      if (e.target.name === 'srv') { cur = +e.target.value; persist(); }
+    };
+    app.onclick = function (e) {
+      var i = e.target.getAttribute('data-del');
+      if (i === null) return;
+      servers.splice(+i, 1);
+      if (cur >= servers.length || cur === +i) cur = 0; else if (cur > +i) cur--;
+      persist(); settings();
+    };
+    document.getElementById('reset').onclick = function () { servers = DEFAULTS.slice(); cur = 0; persist(); settings(); };
+    document.getElementById('add').onsubmit = function (e) {
+      e.preventDefault();
+      var url = document.getElementById('nu').value.replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
+      if (!/^https:\/\/[^\s\/]+(\/\S*)?$/.test(url)) { alert('Địa chỉ phải bắt đầu bằng https://'); return; }
+      servers.push({ type: document.getElementById('nt').value, url: url });
+      cur = servers.length - 1;
+      persist(); settings();
+    };
   }
 
   function route() {
     seq++;
-    if (stopPlayer) { stopPlayer(); stopPlayer = null; }
+    app.onchange = app.onclick = null;
+    var old = document.getElementById('vid');
+    if (old) { old.pause(); old.removeAttribute('src'); old.load(); }
     var h = location.hash.replace(/^#\/?/, '').split('/');
-    if (h[0] === 'watch' && h[1]) watch(decodeURIComponent(h[1]));
-    else if (h[0] === 'search' && h[1]) { q.value = decodeURIComponent(h[1]); list('/api/v1/search?type=video&q=' + h[1]); }
-    else list('/api/v1/trending?region=VN');
+    if (h[0] === 'settings') settings();
+    else if (h[0] === 'watch' && h[1]) watch(decodeURIComponent(h[1]));
+    else if (h[0] === 'search' && h[1]) { q.value = decodeURIComponent(h[1]); list(B().search(h[1])); }
+    else list(B().home);
     window.scrollTo(0, 0);
   }
 
