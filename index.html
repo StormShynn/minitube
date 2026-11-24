@@ -73,10 +73,12 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   // https://github.com/iv-org/documentation (instances.md) when servers die.
   var DEFAULTS = [
     { type: 'piped', url: 'https://api.piped.private.coffee' },
-    { type: 'piped', url: 'https://pipedapi.kavin.rocks' },
+    { type: 'piped', url: 'https://pipedapi.ducks.party' },
     { type: 'invidious', url: 'https://yt.chocolatemoo53.com' },
     { type: 'invidious', url: 'https://invidious.nerdvpn.de' }
   ];
+  // Opened from server.py on the local network (plain http): that server comes first.
+  if (location.protocol === 'http:') DEFAULTS.unshift({ type: 'piped', url: location.protocol + '//' + location.host });
   var app = document.getElementById('app');
   var q = document.getElementById('q');
   var seq = 0; // bumps on every navigation, so a slow old response cannot overwrite the new page
@@ -134,7 +136,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
           title: d.title, author: d.uploader, avatar: d.uploaderAvatar, thumb: d.thumbnailUrl,
           subs: d.uploaderSubscriberCount > 0 ? num(d.uploaderSubscriberCount) + ' người đăng ký' : '',
           views: d.views >= 0 ? num(d.views) + ' lượt xem' : '', when: (d.uploadDate || '').slice(0, 10),
-          src: best ? best.url : d.livestream && d.hls ? d.hls : '', related: this.items(d.relatedStreams)
+          src: best ? best.url : d.hls || '', related: this.items(d.relatedStreams)
         };
       }
     },
@@ -215,8 +217,8 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
         '<div class="meta"><h1>' + esc(v.title) + '</h1><p>' + line([v.views, v.when]) + '</p>' +
         '<div class="chan">' + (av ? '<img class="av" src="' + av + '" alt="">' : '') +
         '<b>' + esc(v.author) + '</b><span>' + esc(v.subs) + '</span></div></div>' +
-        '<h2 class="next">Video tiếp theo</h2><div class="grid">' +
-        v.related.map(function (r) { return card(r, true); }).join('') + '</div>';
+        (v.related.length ? '<h2 class="next">Video tiếp theo</h2><div class="grid">' +
+          v.related.map(function (r) { return card(r, true); }).join('') + '</div>' : '');
       var vid = document.getElementById('vid'), box = document.getElementById('player');
       if (!v.src) return problem('Server này không có bản video máy cũ phát được.', box);
       if (safeUrl(v.thumb)) vid.poster = v.thumb;
