@@ -96,19 +96,27 @@ def playable(kind, base, data):
 
 
 def check(url, kind):
-    passed, start = 0, time.time()
+    """Returns (url, kind, videos passed, seconds, why the last video failed)."""
+    passed, start, why = 0, time.time(), ''
     for vid in TEST_VIDEOS:
         api = f'{url}/streams/{vid}' if kind == 'piped' else f'{url}/api/v1/videos/{vid}?local=true'
+        step = 'api'
         try:
             status, headers, body = fetch(api)
             if 'access-control-allow-origin' not in headers:
-                return url, kind, 0, 0  # Safari would block every request: never usable
+                return url, kind, 0, 0, 'no CORS'  # Safari would block every request: never usable
+            step = 'no playable file'
             src = playable(kind, url, json.loads(body))
-            if src and fetch(src, rng='bytes=0-1023')[0] in (200, 206):
+            if src:
+                step = 'file download'
+                fetch(src, rng='bytes=0-1023')
                 passed += 1
-        except Exception:
-            pass
-    return url, kind, passed, round(time.time() - start, 1)
+                continue
+        except Exception as e:
+            why = f'{step}: {str(e)[:60]}'
+            continue
+        why = step
+    return url, kind, passed, round(time.time() - start, 1), why
 
 
 def main():
@@ -116,15 +124,15 @@ def main():
     print(f'testing {len(found)} servers with {len(TEST_VIDEOS)} videos each')
     with cf.ThreadPoolExecutor(max_workers=32) as pool:
         results = list(pool.map(lambda item: check(*item), found.items()))
-    for url, kind, passed, secs in sorted(results, key=lambda r: (-r[2], r[3])):
-        print(f'{passed}/{len(TEST_VIDEOS)}  {secs:>5}s  {kind:9}  {url}')
+    for url, kind, passed, secs, why in sorted(results, key=lambda r: (-r[2], r[3])):
+        print(f'{passed}/{len(TEST_VIDEOS)}  {secs:>5}s  {kind:9}  {url:45}  {why}')
     # Most videos passed first, then speed in 5 s steps (exact seconds would reorder, and commit, every hour).
     good = sorted((r for r in results if r[2] > 0), key=lambda r: (-r[2], int(r[3] // 5), r[0]))
     if not good:
         print('no working server: keeping the previous servers.json')
         return
     # Only stable fields, so the file (and the repo) changes only when the usable set or its order changes.
-    servers = [{'type': kind, 'url': url} for url, kind, _, _ in good]
+    servers = [{'type': r[1], 'url': r[0]} for r in good]
     OUT.write_text(json.dumps({'servers': servers}, indent=2) + '\n', encoding='utf-8')
     print(f'wrote {len(servers)} servers to {OUT.name}')
 
