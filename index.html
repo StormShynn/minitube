@@ -77,8 +77,10 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     { type: 'invidious', url: 'https://yt.chocolatemoo53.com' },
     { type: 'invidious', url: 'https://invidious.nerdvpn.de' }
   ];
-  // Opened from server.py on the local network (plain http): that server comes first.
-  if (location.protocol === 'http:') DEFAULTS.unshift({ type: 'piped', url: location.protocol + '//' + location.host });
+  // Opened from server.py (local network or a tunnel), not from GitHub Pages: that server comes first.
+  if (/^https?:$/.test(location.protocol) && !/\.github\.io$/.test(location.hostname)) {
+    DEFAULTS.unshift({ type: 'piped', url: location.protocol + '//' + location.host });
+  }
   var app = document.getElementById('app');
   var q = document.getElementById('q');
   var seq = 0; // bumps on every navigation, so a slow old response cannot overwrite the new page
@@ -136,7 +138,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
           title: d.title, author: d.uploader, avatar: d.uploaderAvatar, thumb: d.thumbnailUrl,
           subs: d.uploaderSubscriberCount > 0 ? num(d.uploaderSubscriberCount) + ' người đăng ký' : '',
           views: d.views >= 0 ? num(d.views) + ' lượt xem' : '', when: (d.uploadDate || '').slice(0, 10),
-          src: best ? best.url : d.hls || '', related: this.items(d.relatedStreams)
+          src: abs(best ? best.url : d.hls || ''), related: this.items(d.relatedStreams)
         };
       }
     },

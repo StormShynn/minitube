@@ -1,11 +1,14 @@
 """MiniTube local server: serves index.html plus a tiny Piped-compatible API backed by yt-dlp.
 
-Run on a PC in the same Wi-Fi as the iPhone:  python server.py
-then open the printed http://<PC-IP>:8000 address in Safari on the iPhone.
+Run:  python server.py   then open the printed http://<PC-IP>:8000 address in Safari on the iPhone.
+Away from home: also run  cloudflared tunnel --url http://localhost:8000  and open the https://...trycloudflare.com
+address it prints. Video goes through this PC, because YouTube's links only work from the IP that asked for them.
 """
+import http.client
 import json
 import re
 import socket
+import urllib.error
 import urllib.parse
 import urllib.request
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -20,6 +23,26 @@ VIDEO_ID = re.compile(r'^[A-Za-z0-9_-]{11}$')
 TRENDING = 'https://api.piped.private.coffee/trending?region=VN'
 FALLBACK_HOME = 'nhạc mới nhất'
 OPTS = {'quiet': True, 'no_warnings': True, 'skip_download': True}
+# Only YouTube video hosts may be fetched through /hls, so this is not an open proxy.
+PROXY_OK = re.compile(r'^https://[a-z0-9.-]+\.(googlevideo\.com|youtube\.com)/')
+
+
+def via_proxy(url):
+    return '/hls?u=' + urllib.parse.quote(url, safe='')
+
+
+def rewrite_playlist(text, base):
+    """Point every URL in an HLS playlist (plain lines and URI="..." attributes) back at /hls."""
+    def fix(u):
+        return via_proxy(urllib.parse.urljoin(base, u))
+    out = []
+    for line in text.splitlines():
+        if line and not line.startswith('#'):
+            line = fix(line.strip())
+        else:
+            line = re.sub(r'URI="([^"]+)"', lambda m: 'URI="%s"' % fix(m.group(1)), line)
+        out.append(line)
+    return '\n'.join(out) + '\n'
 
 
 def item(e):
@@ -54,8 +77,6 @@ def streams(vid):
     with YoutubeDL(OPTS) as y:
         d = y.extract_info('https://www.youtube.com/watch?v=' + vid, download=False)
     # YouTube's HLS master playlist has H.264 + AAC variants that iOS plays natively.
-    # shortcut: its links are tied to this PC's public IP, so the iPhone must share the network;
-    # proxy the playlist and segments here if it ever has to work from elsewhere.
     hls = next((f['manifest_url'] for f in d.get('formats') or []
                 if f.get('manifest_url') and 'm3u8' in (f.get('protocol') or '')), None)
     ud = d.get('upload_date') or ''
@@ -65,7 +86,8 @@ def streams(vid):
         'uploaderSubscriberCount': d.get('channel_follower_count') or -1,
         'views': d['view_count'] if d.get('view_count') is not None else -1,
         'uploadDate': f'{ud[:4]}-{ud[4:6]}-{ud[6:]}' if len(ud) == 8 else '',
-        'videoStreams': [], 'hls': hls, 'livestream': bool(d.get('is_live')), 'relatedStreams': [],
+        'videoStreams': [], 'hls': via_proxy(hls) if hls else None,
+        'livestream': bool(d.get('is_live')), 'relatedStreams': [],
     }
 
 
@@ -75,6 +97,8 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         u = urllib.parse.urlsplit(self.path)
+        if u.path == '/hls':
+            return self.proxy(urllib.parse.parse_qs(u.query).get('u', [''])[0])
         m = re.fullmatch(r'/streams/([A-Za-z0-9_-]{11})', u.path)
         try:
             if u.path == '/trending':
@@ -89,6 +113,43 @@ class Handler(SimpleHTTPRequestHandler):
         if u.path in ('/', '/index.html'):  # serve only the app, never other files in this folder
             return super().do_GET()
         self.send_error(404)
+
+    def proxy(self, target):
+        if not PROXY_OK.match(target):
+            return self.send_error(403)
+        headers = {'User-Agent': 'Mozilla/5.0'}
+        if self.headers.get('Range'):
+            headers['Range'] = self.headers['Range']
+        # shortcut: each HLS segment is read whole into memory (a few hundred KB) and retried when empty,
+        # because streaming it in chunks sometimes sent 0 bytes; stream it if huge files ever pass through here.
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(urllib.request.Request(target, headers=headers), timeout=30) as r:
+                    status, rh, body = r.status, r.headers, r.read()
+            except urllib.error.HTTPError as e:
+                return self.send_error(e.code)
+            except (OSError, http.client.HTTPException):
+                body = b''
+                if attempt == 2:
+                    return self.send_error(502)
+                continue
+            if body:
+                break
+        ctype = rh.get('Content-Type', '')
+        if 'mpegurl' in ctype.lower():
+            body = rewrite_playlist(body.decode('utf-8'), target).encode()
+            ctype = 'application/vnd.apple.mpegurl'
+        self.send_response(status)
+        self.send_header('Content-Type', ctype or 'application/octet-stream')
+        self.send_header('Content-Length', str(len(body)))
+        for h in ('Content-Range', 'Accept-Ranges'):
+            if rh.get(h):
+                self.send_header(h, rh[h])
+        self.end_headers()
+        try:
+            self.wfile.write(body)
+        except ConnectionError:  # the player closed the connection (seek, pause, page change)
+            pass
 
     def send_json(self, data, code=200):
         body = json.dumps(data).encode()
