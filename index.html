@@ -72,6 +72,34 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
 .chead img{width:64px;height:64px;border-radius:50%;margin-right:16px;background:var(--chip)}
 .chead p{color:var(--sub);font-size:13px}
 #toast{position:fixed;left:12px;right:12px;bottom:64px;z-index:4;padding:10px 14px;border-radius:8px;background:#323232;color:#fff;font-size:13px;display:none}
+/* YouTube-style player controls */
+.ctl{position:absolute;top:0;left:0;right:0;bottom:0;touch-action:manipulation;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none}
+.ctl .ui{opacity:0;transition:opacity .25s;pointer-events:none}
+.ctl.show .ui{opacity:1;pointer-events:auto}
+.shade{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.35)}
+.pp{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px 0 0 -28px;border:0;border-radius:50%;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center}
+.pp .tri{border-width:11px 0 11px 18px;margin-left:5px}
+.pp .pa{width:16px;height:20px;border-left:5px solid #fff;border-right:5px solid #fff}
+.bot{position:absolute;left:0;right:0;bottom:0;padding:0 10px 4px;color:#fff;font-size:12px}
+.bot .tm{display:flex;align-items:center;justify-content:space-between;height:28px}
+.bot button{border:0;background:none;padding:4px;display:flex}
+.seek{position:relative;height:20px}
+.seek i{position:absolute;left:0;top:8px;height:3px}
+.seek .rail{right:0;background:rgba(255,255,255,.3)}
+.seek .buf{background:rgba(255,255,255,.55)}
+.seek .played{background:#f00}
+.seek .knob{top:3px;width:13px;height:13px;margin-left:-6px;border-radius:50%;background:#f00}
+.spin{position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border:4px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:rot .8s linear infinite;display:none}
+@keyframes rot{to{transform:rotate(360deg)}}
+.rip{position:absolute;top:50%;margin-top:-14px;padding:4px 10px;border-radius:14px;background:rgba(0,0,0,.6);color:#fff;font-size:13px;display:none}
+.tools select{max-width:120px}
+.tools label{margin-left:12px}
+.tools label:first-child{margin-left:0}
+.chaps{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;margin-top:12px}
+.chaps a{flex:none;margin-right:8px;padding:6px 10px;border-radius:8px;background:var(--chip);font-size:12px}
+.desc{margin-top:12px;padding:10px;border-radius:10px;background:var(--chip);font-size:13px;white-space:pre-wrap;word-wrap:break-word;max-height:4.4em;overflow:hidden}
+.desc.open{max-height:none}
+.desc a[data-t]{color:#3ea6ff}
 </style>
 </head>
 <body>
@@ -113,7 +141,8 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   if (/^https?:$/.test(location.protocol) && !/\.github\.io$/.test(location.hostname)) {
     DEFAULTS.unshift({ type: 'piped', url: location.protocol + '//' + location.host });
   }
-  var PREFS = { autoplay: true, resume: true, speed: 1, sponsor: true, region: 'VN', hideShorts: false, theme: 'dark' };
+  var PREFS = { autoplay: true, resume: true, speed: 1, sponsor: true, region: 'VN', hideShorts: false, theme: 'dark',
+    nativePlayer: false, cc: '' };
   var REGIONS = { VN: 'Việt Nam', US: 'Mỹ', JP: 'Nhật Bản', KR: 'Hàn Quốc', GB: 'Anh', IN: 'Ấn Độ', TH: 'Thái Lan' };
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   var HISTORY_MAX = 200;
@@ -122,6 +151,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   var app = document.getElementById('app');
   var q = document.getElementById('q');
   var seq = 0;          // bumps on every navigation, so a slow old response cannot overwrite the new page
+  var tries = 0;        // servers tried for the current page; route() resets it
   var autoNext = false; // the next navigation comes from "video ended", so keep the same player
   var nextId = null;
 
@@ -158,6 +188,17 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   function line(parts) { return parts.filter(Boolean).map(esc).join(' · '); }
   function first(a) { return a && a[0] ? a[0].url : ''; }
   function channelId(u) { var m = /\/channel\/([\w-]+)/.exec(u || ''); return m ? m[1] : ''; }
+  // DOMParser documents never run scripts or onerror handlers, so untrusted HTML is safe to read here.
+  function htmlToText(html) {
+    var doc = new DOMParser().parseFromString('<body>' + String(html || '').replace(/<br\s*\/?>/gi, '\n') + '</body>', 'text/html');
+    return doc.body.textContent || '';
+  }
+  // Escaped description text with "1:23" / "1:02:03" turned into links that seek the player.
+  function linkTimes(text) {
+    return esc(text).replace(/\b(?:(\d{1,2}):)?(\d{1,2}):(\d{2})\b/g, function (all, h, m, s) {
+      return '<a data-t="' + ((+h || 0) * 3600 + (+m) * 60 + (+s)) + '">' + all + '</a>';
+    });
+  }
 
   // ---- watch history (also stores the resume position) ----
   function findHist(id) {
@@ -178,7 +219,8 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
 
   // Each backend turns its own JSON into the same shapes:
   // item  = {id, title, author, avatar, thumb, live, short, dur, views, when}
-  // video = {title, author, channel, avatar, subs, views, when, thumb, dur, src, related}
+  // video = {title, author, channel, avatar, subsText, views, when, thumb, dur, src, related,
+  //          likes, desc, chapters: [{title, start}], subs: [{code, label, url}] (subtitles)}
   // chan  = {name, avatar, subs, items}
   var BACKENDS = {
     piped: {
@@ -202,9 +244,16 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
         return {
           title: d.title, author: d.uploader, channel: channelId(d.uploaderUrl), avatar: d.uploaderAvatar,
           thumb: d.thumbnailUrl, dur: d.duration,
-          subs: d.uploaderSubscriberCount > 0 ? num(d.uploaderSubscriberCount) + ' người đăng ký' : '',
+          subsText: d.uploaderSubscriberCount > 0 ? num(d.uploaderSubscriberCount) + ' người đăng ký' : '',
           views: d.views >= 0 ? num(d.views) + ' lượt xem' : '', when: (d.uploadDate || '').slice(0, 10),
-          src: abs(best ? best.url : d.hls || ''), related: this.items(d.relatedStreams)
+          src: abs(best ? best.url : d.hls || ''), related: this.items(d.relatedStreams),
+          likes: d.likes, desc: htmlToText(d.description),
+          chapters: (d.chapters || []).map(function (c) { return { title: c.title, start: c.start }; }),
+          // YouTube's caption URL returns WebVTT (what iOS reads) when asked with fmt=vtt.
+          subs: (d.subtitles || []).map(function (s) {
+            return { code: s.code, label: (s.name || s.code) + (s.autoGenerated ? ' (tự động)' : ''),
+              url: abs(/[?&]fmt=/.test(s.url) ? s.url.replace(/([?&]fmt=)[^&]*/, '$1vtt') : s.url + '&fmt=vtt') };
+          })
         };
       },
       chan: function (d) {
@@ -233,10 +282,12 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       watch: function (d) {
         var mux = (d.formatStreams || []).filter(function (f) { return /^video\/mp4/.test(f.type); });
         return {
-          title: d.title, author: d.author, channel: d.authorId, avatar: first(d.authorThumbnails), subs: d.subCountText,
+          title: d.title, author: d.author, channel: d.authorId, avatar: first(d.authorThumbnails), subsText: d.subCountText,
           thumb: first(d.videoThumbnails), dur: d.lengthSeconds, views: d.viewCount != null ? num(d.viewCount) + ' lượt xem' : '',
           when: d.publishedText, related: this.items(d.recommendedVideos),
-          src: abs(mux.length ? mux[mux.length - 1].url : d.liveNow && d.hlsUrl ? d.hlsUrl : '')
+          src: abs(mux.length ? mux[mux.length - 1].url : d.liveNow && d.hlsUrl ? d.hlsUrl : ''),
+          likes: d.likeCount, desc: d.description, chapters: [],
+          subs: (d.captions || []).map(function (c) { return { code: c.language_code || c.languageCode, label: c.label, url: abs(c.url) }; })
         };
       },
       chan: function (d) {
@@ -268,11 +319,45 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     x.onerror = x.ontimeout = function () { fail(0); };
     x.send();
   }
-  function get(path, ok) {
+  function host(u) { return String(u).replace(/^https?:\/\//, ''); }
+  // Move to the next server and return true (the caller retries there), or show the error once every
+  // server was tried for this page. The server that works stays selected for the next pages.
+  function failover(text, where) {
+    if (++tries < servers.length) {
+      cur = (cur + 1) % servers.length;
+      persist();
+      toast('Server lỗi, đang thử ' + host(S().url) + '…');
+      return true;
+    }
+    problem(text + ' Đã thử cả ' + servers.length + ' server.', where);
+    return false;
+  }
+  // pathFn builds the path for the current server, because Piped and Invidious use different paths.
+  function get(pathFn, ok) {
     var my = seq;
-    request(S().url + path, function (d) { if (my === seq) ok(d); }, function (status) {
-      if (my === seq) problem(status ? 'Server không trả được dữ liệu.' : 'Không kết nối được server.');
+    request(S().url + pathFn(), function (d) { if (my === seq) ok(d); }, function (status) {
+      if (my === seq && failover(status ? 'Server không trả được dữ liệu.' : 'Không kết nối được server.')) get(pathFn, ok);
     });
+  }
+
+  // Once a day, add Piped servers from a list that is re-checked automatically on GitHub.
+  var LIST_URL = 'https://raw.githubusercontent.com/jayxdcode/piped-instances/main/public/minimal.json';
+  function discover(force) {
+    if (!force && Date.now() - load('discovered', 0) < 864e5) return;
+    request(LIST_URL, function (d) {
+      var removed = load('removed', []), added = 0;
+      (d.instances || []).forEach(function (i) {
+        var url = String(i.api_url || '').replace(/\/+$/, '');
+        if (!/^https:\/\/[^\s\/]+$/.test(url) || removed.indexOf(url) >= 0) return; // third-party data: https host only
+        if (servers.some(function (s) { return s.url === url; })) return;
+        servers.push({ type: 'piped', url: url });
+        added++;
+      });
+      save('discovered', Date.now());
+      if (added) persist();
+      if (force || added) toast(added ? 'Đã thêm ' + added + ' server mới.' : 'Không có server mới.');
+      if (added && location.hash === '#/settings') settings();
+    }, function () { if (force) toast('Không tải được danh sách server.'); });
   }
 
   function card(v, compact) {
@@ -291,9 +376,9 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       .map(function (v) { return card(v, compact); }).join('');
   }
 
-  function list(path) {
+  function list(pathFn) {
     app.innerHTML = '<p class="msg">Đang tải…</p>';
-    get(path, function (d) {
+    get(pathFn, function (d) {
       var html = cards(B().list(d));
       app.innerHTML = html ? '<div class="grid">' + html + '</div>' : '<p class="msg">Không có kết quả.</p>';
     });
@@ -306,21 +391,118 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     }, function () {}); // 404 means nobody marked a sponsor segment in this video
   }
 
-  function watch(id, auto) {
-    var vid = auto ? document.getElementById('vid') : null;
+  // Subtitles are fetched here and handed to the player as a same-origin blob, so the <video> needs no
+  // crossorigin attribute (that attribute would break servers whose video has no CORS header).
+  function setSubtitle(vid, sub, my) {
+    var old = vid.querySelectorAll('track');
+    for (var i = 0; i < old.length; i++) vid.removeChild(old[i]);
+    if (!sub) return;
+    var x = new XMLHttpRequest();
+    x.open('GET', sub.url);
+    x.timeout = 20000;
+    x.onload = function () {
+      if (my !== seq) return;
+      if (x.status !== 200 || !/^﻿?WEBVTT/.test(x.responseText)) return toast('Không tải được phụ đề.');
+      var t = document.createElement('track');
+      t.kind = 'subtitles';
+      t.label = sub.label;
+      t.srclang = sub.code || '';
+      t.src = URL.createObjectURL(new Blob([x.responseText], { type: 'text/vtt' }));
+      vid.appendChild(t);
+      vid.textTracks[vid.textTracks.length - 1].mode = 'showing';
+    };
+    x.onerror = x.ontimeout = function () { toast('Không tải được phụ đề.'); };
+    x.send();
+  }
+
+  // YouTube-style controls over the <video>: big play/pause, red seek bar with the buffered part, time,
+  // double-tap left/right to skip 10 s, spinner while loading, controls fade out after 3 s of playback.
+  function controls(vid, box) {
+    var ctl = document.createElement('div');
+    ctl.className = 'ctl show';
+    ctl.innerHTML = '<div class="ui shade"></div>' +
+      '<button class="ui pp" id="pp" aria-label="Phát hoặc tạm dừng"><i class="tri"></i></button>' +
+      '<div class="spin" id="spin"></div><div class="rip" id="rip"></div>' +
+      '<div class="ui bot" id="bot"><div class="tm"><span id="tm">0:00 / 0:00</span>' +
+      '<button id="fs" aria-label="Toàn màn hình"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">' +
+      '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button></div>' +
+      '<div class="seek" id="seek"><i class="rail"></i><i class="buf" id="buf"></i><i class="played" id="played"></i><i class="knob" id="knob"></i></div></div>';
+    box.appendChild(ctl);
+    function $(id) { return document.getElementById(id); }
+    var pp = $('pp'), tm = $('tm'), seek = $('seek'), buf = $('buf'), played = $('played'), knob = $('knob'), spin = $('spin'), rip = $('rip');
+    var hideTimer, ripTimer, lastTap = 0, dragging = false;
+
+    function show() {
+      ctl.className = 'ctl show';
+      clearTimeout(hideTimer);
+      if (!vid.paused) hideTimer = setTimeout(function () { ctl.className = 'ctl'; }, 3000);
+    }
+    function pct(t) { return vid.duration ? Math.max(0, Math.min(100, t / vid.duration * 100)) + '%' : '0%'; }
+    function paint(t) {
+      played.style.width = knob.style.left = pct(t);
+      tm.textContent = time(t) + ' / ' + time(vid.duration || 0);
+    }
+    function skip(d) {
+      vid.currentTime = Math.max(0, Math.min((vid.duration || 0) - 0.5, vid.currentTime + d));
+      rip.textContent = d < 0 ? '« 10 giây' : '10 giây »';
+      rip.style.left = d < 0 ? '12%' : 'auto';
+      rip.style.right = d < 0 ? 'auto' : '12%';
+      rip.style.display = 'block';
+      clearTimeout(ripTimer);
+      ripTimer = setTimeout(function () { rip.style.display = 'none'; }, 700);
+    }
+    function frac(e) {
+      var p = e.changedTouches ? e.changedTouches[0] : e, r = seek.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (p.clientX - r.left) / r.width));
+    }
+
+    pp.onclick = function (e) { e.stopPropagation(); if (vid.paused) vid.play(); else vid.pause(); show(); };
+    $('fs').onclick = function (e) {
+      e.stopPropagation();
+      try { if (vid.webkitEnterFullscreen) vid.webkitEnterFullscreen(); else if (box.requestFullscreen) box.requestFullscreen(); } catch (err) {}
+    };
+    $('bot').onclick = function (e) { e.stopPropagation(); show(); };
+    ctl.onclick = function (e) {
+      var now = Date.now(), r = ctl.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+      if (now - lastTap < 350 && (x < 0.4 || x > 0.6)) { lastTap = 0; skip(x < 0.4 ? -10 : 10); show(); return; }
+      lastTap = now;
+      if (ctl.className === 'ctl show' && !vid.paused) { clearTimeout(hideTimer); ctl.className = 'ctl'; } else show();
+    };
+    seek.addEventListener('touchstart', function (e) { if (vid.duration) { dragging = true; paint(frac(e) * vid.duration); show(); } });
+    seek.addEventListener('touchmove', function (e) { if (dragging) { e.preventDefault(); paint(frac(e) * vid.duration); } });
+    seek.addEventListener('touchend', function (e) { if (dragging) { dragging = false; vid.currentTime = frac(e) * vid.duration; show(); } });
+    seek.onclick = function (e) { e.stopPropagation(); if (vid.duration) { vid.currentTime = frac(e) * vid.duration; show(); } };
+
+    vid.addEventListener('play', function () { pp.innerHTML = '<i class="pa"></i>'; show(); });
+    vid.addEventListener('pause', function () { pp.innerHTML = '<i class="tri"></i>'; show(); });
+    vid.addEventListener('loadedmetadata', function () { paint(vid.currentTime); });
+    vid.addEventListener('timeupdate', function () { if (!dragging) paint(vid.currentTime); });
+    vid.addEventListener('progress', function () { var b = vid.buffered; if (b.length) buf.style.width = pct(b.end(b.length - 1)); });
+    vid.addEventListener('waiting', function () { spin.style.display = 'block'; });
+    vid.addEventListener('playing', function () { spin.style.display = 'none'; });
+    vid.addEventListener('emptied', function () { buf.style.width = '0'; paint(0); });
+  }
+
+  // auto: continue playing (video ended or a retry on another server); reuse: keep the current player element.
+  function watch(id, auto, reuse) {
+    var vid = auto || reuse ? document.getElementById('vid') : null;
     if (!vid) {
-      app.innerHTML = '<div class="player" id="player"><video id="vid" controls playsinline webkit-playsinline preload="metadata"></video></div>' +
-        '<div id="info"><p class="msg">Đang tải…</p></div>';
+      app.innerHTML = '<div class="player" id="player"><video id="vid" playsinline webkit-playsinline preload="metadata"' +
+        (prefs.nativePlayer ? ' controls' : '') + '></video></div><div id="info"><p class="msg">Đang tải…</p></div>';
       vid = document.getElementById('vid');
+      if (!prefs.nativePlayer) controls(vid, document.getElementById('player'));
     } else {
       document.getElementById('info').innerHTML = '<p class="msg">Đang tải…</p>';
     }
     var box = document.getElementById('player'), info = document.getElementById('info');
-    var segs = [], resumed = false, lastSave = 0, my = seq;
+    var segs = [], resumed = false, lastSave = 0, my = seq, src = '', retries = 0, lastT = 0, resumeAt = 0;
     nextId = null;
+    setSubtitle(vid, null, my);
 
+    function reload() { if (my === seq) { resumeAt = lastT; vid.src = src; vid.play(); } }
     vid.onplaying = function () {
       vid.playbackRate = prefs.speed;
+      if (resumeAt) { vid.currentTime = resumeAt; resumeAt = 0; return; }
       if (resumed) return;
       resumed = true;
       var h = findHist(id), p = h ? h.pos : 0;
@@ -331,6 +513,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       for (var i = 0; i < segs.length; i++) {
         if (t >= segs[i][0] && t < segs[i][1] - 0.5) { vid.currentTime = segs[i][1]; toast('Đã bỏ qua đoạn quảng cáo tài trợ'); return; }
       }
+      lastT = t;
       if (Math.abs(t - lastSave) > 5) { lastSave = t; savePos(id, t); }
     };
     vid.onpause = function () { if (!vid.ended) savePos(id, vid.currentTime); };
@@ -338,28 +521,66 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       savePos(id, 0);
       if (prefs.autoplay && nextId) { autoNext = true; location.hash = '#/watch/' + encodeURIComponent(nextId); }
     };
-    vid.onerror = function () { problem('Không phát được video (lỗi ' + (vid.error ? vid.error.code : '?') + ').', box); };
+    // Network drop: retry from the same second (when the connection is back) instead of failing.
+    vid.onerror = function () {
+      if (my !== seq) return; // a late error from a video we already left
+      var code = vid.error ? vid.error.code : '?';
+      if (code === 2 && src && retries < 3) {
+        retries++;
+        toast('Mất kết nối, sẽ phát tiếp khi có mạng…');
+        if (navigator.onLine === false) window.ononline = function () { window.ononline = null; reload(); };
+        else setTimeout(reload, 3000);
+        return;
+      }
+      if (failover('Không phát được video (lỗi ' + code + ').', box)) watch(id, !vid.paused || lastT > 0, true);
+    };
 
-    get(B().video(id), function (d) {
+    get(function () { return B().video(id); }, function (d) {
       var v = B().watch(d), av = safeUrl(v.avatar);
       var rel = v.related.filter(function (r) { return !(prefs.hideShorts && r.short); });
+      var cc = -1;
+      for (var i = 0; i < v.subs.length && cc < 0; i++) if (prefs.cc && v.subs[i].code === prefs.cc) cc = i;
       nextId = rel[0] ? rel[0].id : null;
       remember(id, v);
       info.innerHTML =
-        '<div class="meta"><h1>' + esc(v.title) + '</h1><p>' + line([v.views, v.when]) + '</p>' +
+        '<div class="meta"><h1>' + esc(v.title) + '</h1><p>' + line([v.views, v.when, v.likes > 0 ? num(v.likes) + ' lượt thích' : '']) + '</p>' +
         '<a class="chan"' + (v.channel ? ' href="#/channel/' + encodeURIComponent(v.channel) + '"' : '') + '>' +
-        (av ? '<img class="av" src="' + av + '" alt="">' : '') + '<b>' + esc(v.author) + '</b><span>' + esc(v.subs) + '</span></a>' +
-        '<div class="tools">Tốc độ<select id="speed">' + SPEEDS.map(function (s) {
+        (av ? '<img class="av" src="' + av + '" alt="">' : '') + '<b>' + esc(v.author) + '</b><span>' + esc(v.subsText) + '</span></a>' +
+        '<div class="tools"><label>Tốc độ<select id="speed">' + SPEEDS.map(function (s) {
           return '<option value="' + s + '"' + (s === prefs.speed ? ' selected' : '') + '>' + s + 'x</option>';
-        }).join('') + '</select></div></div>' +
+        }).join('') + '</select></label>' +
+        (v.subs.length ? '<label>Phụ đề<select id="cc"><option value="">Tắt</option>' + v.subs.map(function (s, i) {
+          return '<option value="' + i + '"' + (i === cc ? ' selected' : '') + '>' + esc(s.label) + '</option>';
+        }).join('') + '</select></label>' : '') + '</div>' +
+        (v.chapters.length ? '<div class="chaps">' + v.chapters.map(function (c) {
+          return '<a data-t="' + (+c.start || 0) + '">' + time(c.start) + ' · ' + esc(c.title) + '</a>';
+        }).join('') + '</div>' : '') +
+        (v.desc ? '<div class="desc" id="desc">' + linkTimes(v.desc) + '</div>' : '') + '</div>' +
         (rel.length ? '<h2 class="next">Video tiếp theo<small>' + (prefs.autoplay ? 'Tự phát: bật' : 'Tự phát: tắt') + '</small></h2>' +
           '<div class="grid">' + cards(rel, true) + '</div>' : '');
       document.getElementById('speed').onchange = function () {
         prefs.speed = +this.value; save('prefs', prefs); vid.playbackRate = prefs.speed;
       };
-      if (!v.src) return problem('Server này không có bản video máy cũ phát được.', box);
+      if (v.subs.length) document.getElementById('cc').onchange = function () {
+        var s = v.subs[+this.value];
+        prefs.cc = this.value === '' ? '' : s.code;
+        save('prefs', prefs);
+        setSubtitle(vid, this.value === '' ? null : s, my);
+      };
+      // Tap a chapter or a time in the description to jump there; tap the description to expand it.
+      info.onclick = function (e) {
+        var t = e.target.getAttribute('data-t');
+        if (t !== null) { vid.currentTime = +t; vid.play(); window.scrollTo(0, 0); }
+        else if (e.target.id === 'desc') e.target.className = e.target.className === 'desc' ? 'desc open' : 'desc';
+      };
+      if (!v.src) {
+        if (failover('Server này không có bản video máy cũ phát được.', box)) watch(id, auto, true);
+        return;
+      }
       if (safeUrl(v.thumb)) vid.poster = v.thumb;
+      src = v.src;
       vid.src = v.src;
+      if (cc >= 0) setSubtitle(vid, v.subs[cc], my);
       // The player was started by a tap earlier, so iOS lets it continue with the next video.
       if (auto) vid.play();
       if (prefs.sponsor) sponsorSegments(id, function (s) { if (my === seq) segs = s; });
@@ -368,7 +589,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
 
   function channel(id) {
     app.innerHTML = '<p class="msg">Đang tải…</p>';
-    get(B().channel(id), function (d) {
+    get(function () { return B().channel(id); }, function (d) {
       var c = B().chan(d), av = safeUrl(c.avatar);
       function show(items) {
         var html = cards(items);
@@ -378,7 +599,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       }
       if (c.items.length) return show(c.items);
       // Piped often returns no channel videos now: search the channel name and keep only its own videos.
-      get(B().search(encodeURIComponent(c.name || '')), function (r) {
+      get(function () { return B().search(encodeURIComponent(c.name || '')); }, function (r) {
         show(B().list(r).filter(function (v) { return v.channel === id; }));
       });
     });
@@ -411,6 +632,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       check('autoplay', 'Tự động phát video tiếp theo') +
       check('resume', 'Xem tiếp từ chỗ đã dừng') +
       check('sponsor', 'Tự bỏ qua đoạn quảng cáo tài trợ trong video (SponsorBlock)') +
+      check('nativePlayer', 'Dùng trình phát gốc của iOS (nếu trình phát kiểu YouTube bị lỗi)') +
       choose('speed', 'Tốc độ phát mặc định', speeds) +
       '<h2>Nội dung</h2>' +
       choose('region', 'Khu vực thịnh hành', REGIONS) +
@@ -425,8 +647,10 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       '<button class="btn">Thêm</button></form>' +
       '<p class="hint">Với Piped, nhập địa chỉ API (thường bắt đầu bằng pipedapi. hoặc api.). ' +
       'Piped thường phát được trên máy cũ, Invidious thường chỉ xem được danh sách. ' +
-      'Server công cộng hay hỏng: khi lỗi, bấm "Đổi server".</p>' +
-      '<button class="btn" id="reset">Khôi phục danh sách server mặc định</button></div>';
+      'Khi một server lỗi, app tự chuyển sang server kế tiếp và nhớ server chạy được. ' +
+      'Mỗi ngày app tự tìm thêm server Piped mới.</p>' +
+      '<button class="btn" id="find">Tìm server mới ngay</button>' +
+      '<button class="btn" id="reset">Khôi phục danh sách mặc định</button></div>';
 
     app.onchange = function (e) {
       var t = e.target, key = t.getAttribute('data-pref');
@@ -439,6 +663,9 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     app.onclick = function (e) {
       var i = e.target.getAttribute('data-del');
       if (i === null) return;
+      var removed = load('removed', []);
+      removed.push(servers[+i].url); // so the daily server search does not add it back
+      save('removed', removed);
       servers.splice(+i, 1);
       if (cur >= servers.length || cur === +i) cur = 0; else if (cur > +i) cur--;
       persist(); settings();
@@ -446,7 +673,10 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     document.getElementById('clear').onclick = function () {
       if (confirm('Xóa toàn bộ lịch sử xem?')) { history = []; save('history', history); settings(); }
     };
-    document.getElementById('reset').onclick = function () { servers = DEFAULTS.slice(); cur = 0; persist(); settings(); };
+    document.getElementById('reset').onclick = function () {
+      servers = DEFAULTS.slice(); cur = 0; save('removed', []); persist(); settings(); discover(true);
+    };
+    document.getElementById('find').onclick = function () { discover(true); };
     document.getElementById('add').onsubmit = function (e) {
       e.preventDefault();
       var url = document.getElementById('nu').value.replace(/^\s+|\s+$/g, '').replace(/\/+$/, '');
@@ -459,6 +689,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
 
   function route() {
     seq++;
+    tries = 0;
     app.onchange = app.onclick = null;
     var auto = autoNext;
     autoNext = false;
@@ -471,8 +702,8 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     else if (h[0] === 'history') historyPage();
     else if (h[0] === 'watch' && h[1]) watch(decodeURIComponent(h[1]), auto);
     else if (h[0] === 'channel' && h[1]) channel(decodeURIComponent(h[1]));
-    else if (h[0] === 'search' && h[1]) { q.value = decodeURIComponent(h[1]); list(B().search(h[1])); }
-    else list(B().home());
+    else if (h[0] === 'search' && h[1]) { q.value = decodeURIComponent(h[1]); list(function () { return B().search(h[1]); }); }
+    else list(function () { return B().home(); });
     window.scrollTo(0, 0);
   }
 
@@ -484,6 +715,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   };
   window.onhashchange = route;
   route();
+  discover(false);
 })();
 </script>
 </body>
