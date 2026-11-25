@@ -86,6 +86,14 @@ def streams(vid, direct):
     # YouTube's HLS master playlist has H.264 + AAC variants that iOS plays natively.
     hls = next((f['manifest_url'] for f in d.get('formats') or []
                 if f.get('manifest_url') and 'm3u8' in (f.get('protocol') or '')), None)
+    # Sound-only HLS playlist (formats 233/234) for the app's listen mode: far less data than video.
+    sound = next((f['url'] for f in d.get('formats') or []
+                  if f.get('vcodec') == 'none' and 'm3u8' in (f.get('protocol') or '')), None)
+
+    def link(u):
+        # Same network as this PC: same public IP, so the phone can load Google's links itself
+        # (faster, and no video passes through this PC). From elsewhere (tunnel): go through /hls.
+        return (u if direct else via_proxy(u)) if u else None
     ud = d.get('upload_date') or ''
     return {
         'title': d.get('title'), 'uploader': d.get('channel') or d.get('uploader'), 'uploaderAvatar': None,
@@ -93,9 +101,8 @@ def streams(vid, direct):
         'uploaderSubscriberCount': d.get('channel_follower_count') or -1,
         'views': d['view_count'] if d.get('view_count') is not None else -1,
         'uploadDate': f'{ud[:4]}-{ud[4:6]}-{ud[6:]}' if len(ud) == 8 else '',
-        # Same network as this PC: same public IP, so the phone can load Google's links itself
-        # (faster, and no video passes through this PC). From elsewhere (tunnel): go through /hls.
-        'videoStreams': [], 'hls': (hls if direct else via_proxy(hls)) if hls else None,
+        'videoStreams': [], 'hls': link(hls),
+        'audioStreams': [{'url': link(sound), 'mimeType': 'application/x-mpegURL'}] if sound else [],
         'livestream': bool(d.get('is_live')), 'relatedStreams': [],
     }
 
@@ -107,6 +114,12 @@ class Handler(SimpleHTTPRequestHandler):
 
     def __init__(self, *a, **k):
         super().__init__(*a, directory=str(ROOT), **k)
+
+    def handle(self):
+        try:
+            super().handle()
+        except ConnectionError:  # the phone or tunnel dropped a kept-alive connection: normal, not worth a traceback
+            pass
 
     def do_GET(self):
         u = urllib.parse.urlsplit(self.path)

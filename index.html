@@ -50,6 +50,9 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
 .tools select{margin-left:6px;height:30px;border:0;border-radius:15px;background:var(--chip);padding:0 10px}
 .next{display:flex;align-items:center;justify-content:space-between;font-size:16px;padding:4px 12px 12px}
 .next small{font-size:12px;font-weight:400;color:var(--sub)}
+.next a{font-size:13px;font-weight:400;color:#3ea6ff}
+.player.listen{background:#000 center/cover no-repeat}
+.tools .chip{margin-left:12px;padding:5px 12px;border:0;border-radius:15px;background:var(--chip);font-size:13px}
 .msg{padding:32px 16px;text-align:center;color:var(--sub)}
 .btn{margin:12px 4px 0;padding:8px 16px;border:0;border-radius:18px;background:var(--chip);font-size:14px}
 .page{padding:16px 12px}
@@ -134,7 +137,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     ? { type: 'piped', url: location.protocol + '//' + location.host } : null;
   if (LOCAL) DEFAULTS.unshift(LOCAL);
   var PREFS = { autoplay: true, resume: true, speed: 1, sponsor: true, region: 'VN', hideShorts: false, theme: 'dark',
-    nativePlayer: false, cc: '', embed: true };
+    nativePlayer: false, cc: '', embed: true, audioOnly: false };
   var REGIONS = { VN: 'Việt Nam', US: 'Mỹ', JP: 'Nhật Bản', KR: 'Hàn Quốc', GB: 'Anh', IN: 'Ấn Độ', TH: 'Thái Lan' };
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   var HISTORY_MAX = 200;
@@ -155,6 +158,8 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   var cur = load('cur', 0);
   var prefs = load('prefs', {});
   var history = load('history', []);
+  var recs = load('recs', []); // "next" videos of what you watched: the pool for "Dành cho bạn" on the home page
+  var carryTime = 0;           // position to continue from when switching between video and listen mode
   for (var k in PREFS) if (!(k in prefs)) prefs[k] = PREFS[k];
   if (!servers.length) servers = DEFAULTS;
   if (!servers[cur]) cur = 0;
@@ -205,6 +210,25 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     if (history.length > HISTORY_MAX) history.length = HISTORY_MAX;
     save('history', history);
   }
+  function addRecs(items) {
+    var seen = {};
+    recs = items.slice(0, 8).concat(recs).filter(function (r) {
+      if (!r.id || seen[r.id]) return false;
+      seen[r.id] = true;
+      return true;
+    }).slice(0, 120);
+    save('recs', recs);
+  }
+  // 10 random picks from the pool you have not watched yet, so the home page changes on every visit.
+  function forYou() {
+    var pool = recs.filter(function (r) { return !findHist(r.id) && !(prefs.hideShorts && r.short); });
+    for (var i = pool.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1)), t = pool[i];
+      pool[i] = pool[j];
+      pool[j] = t;
+    }
+    return pool.slice(0, 10);
+  }
   function savePos(id, t) {
     var h = findHist(id);
     if (h) { h.pos = t; save('history', history); }
@@ -213,7 +237,8 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   // Each backend turns its own JSON into the same shapes:
   // item  = {id, title, author, avatar, thumb, live, short, dur, views, when}
   // video = {title, author, channel, avatar, subsText, views, when, thumb, dur, src, related,
-  //          likes, desc, chapters: [{title, start}], subs: [{code, label, url}] (subtitles)}
+  //          likes, desc, chapters: [{title, start}], subs: [{code, label, url}] (subtitles),
+  //          audio (sound-only file for listen mode, may be empty)}
   // chan  = {name, avatar, subs, items}
   var BACKENDS = {
     piped: {
@@ -240,6 +265,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
           subsText: d.uploaderSubscriberCount > 0 ? num(d.uploaderSubscriberCount) + ' người đăng ký' : '',
           views: d.views >= 0 ? num(d.views) + ' lượt xem' : '', when: (d.uploadDate || '').slice(0, 10),
           src: abs(best ? best.url : d.hls || ''), related: this.items(d.relatedStreams),
+          audio: abs(((d.audioStreams || []).filter(function (a) { return /mp4|mpegurl/i.test(a.mimeType || ''); })[0] || {}).url || ''),
           likes: d.likes, desc: htmlToText(d.description),
           chapters: (d.chapters || []).map(function (c) { return { title: c.title, start: c.start }; }),
           // YouTube's caption URL returns WebVTT (what iOS reads) when asked with fmt=vtt.
@@ -279,6 +305,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
           thumb: first(d.videoThumbnails), dur: d.lengthSeconds, views: d.viewCount != null ? num(d.viewCount) + ' lượt xem' : '',
           when: d.publishedText, related: this.items(d.recommendedVideos),
           src: abs(mux.length ? mux[mux.length - 1].url : d.liveNow && d.hlsUrl ? d.hlsUrl : ''),
+          audio: abs(((d.adaptiveFormats || []).filter(function (f) { return /^audio\/mp4/.test(f.type); })[0] || {}).url || ''),
           likes: d.likeCount, desc: d.description, chapters: [],
           subs: (d.captions || []).map(function (c) { return { code: c.language_code || c.languageCode, label: c.label, url: abs(c.url) }; })
         };
@@ -377,11 +404,14 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       .map(function (v) { return card(v, compact); }).join('');
   }
 
-  function list(pathFn) {
+  function list(pathFn, home) {
     app.innerHTML = '<p class="msg">Đang tải…</p>';
     get(pathFn, function (d) {
-      var html = cards(B().list(d));
-      app.innerHTML = html ? '<div class="grid">' + html + '</div>' : '<p class="msg">Không có kết quả.</p>';
+      var html = cards(B().list(d)), mine = home ? forYou() : [];
+      app.innerHTML = (mine.length ? '<h2 class="next">Dành cho bạn<a id="more">Làm mới</a></h2>' +
+          '<div class="grid">' + cards(mine) + '</div><h2 class="next">Thịnh hành</h2>' : '') +
+        (html ? '<div class="grid">' + html + '</div>' : '<p class="msg">Không có kết quả.</p>');
+      if (mine.length) document.getElementById('more').onclick = route;
     });
   }
 
@@ -487,16 +517,20 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   // auto: continue playing (video ended or a retry on another server); reuse: keep the current player element.
   function watch(id, auto, reuse) {
     var vid = auto || reuse ? document.getElementById('vid') : null;
+    // Listen mode uses <audio>: Safari on iOS keeps audio playing with the screen off, but pauses <video>.
+    var tag = prefs.audioOnly ? 'audio' : 'video';
     if (!vid) {
-      app.innerHTML = '<div class="player" id="player"><video id="vid" playsinline webkit-playsinline preload="metadata"' +
-        (prefs.nativePlayer ? ' controls' : '') + '></video></div><div id="info"><p class="msg">Đang tải…</p></div>';
+      app.innerHTML = '<div class="player' + (prefs.audioOnly ? ' listen' : '') + '" id="player"><' + tag +
+        ' id="vid" playsinline webkit-playsinline preload="metadata"' +
+        (prefs.nativePlayer ? ' controls' : '') + '></' + tag + '></div><div id="info"><p class="msg">Đang tải…</p></div>';
       vid = document.getElementById('vid');
       if (!prefs.nativePlayer) controls(vid, document.getElementById('player'));
     } else {
       document.getElementById('info').innerHTML = '<p class="msg">Đang tải…</p>';
     }
     var box = document.getElementById('player'), info = document.getElementById('info');
-    var segs = [], resumed = false, lastSave = 0, my = seq, src = '', retries = 0, lastT = 0, resumeAt = 0;
+    var segs = [], resumed = false, lastSave = 0, my = seq, src = '', retries = 0, lastT = 0, resumeAt = carryTime;
+    carryTime = 0;
     nextId = null;
     setSubtitle(vid, null, my);
 
@@ -555,8 +589,9 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       for (var i = 0; i < v.subs.length && cc < 0; i++) if (prefs.cc && v.subs[i].code === prefs.cc) cc = i;
       nextId = rel[0] ? rel[0].id : null;
       remember(id, v);
+      addRecs(rel);
       info.innerHTML =
-        '<div class="meta"><h1>' + esc(v.title) + '</h1><p>' + line([v.views, v.when, v.likes > 0 ? num(v.likes) + ' lượt thích' : '']) + '</p>' +
+        '<div class="meta"><h1>' + esc(v.title) + '</h1><p id="stats">' + line([v.views, v.when, v.likes > 0 ? num(v.likes) + ' lượt thích' : '']) + '</p>' +
         '<a class="chan"' + (v.channel ? ' href="#/channel/' + encodeURIComponent(v.channel) + '"' : '') + '>' +
         (av ? '<img class="av" src="' + av + '" alt="">' : '') + '<b>' + esc(v.author) + '</b><span>' + esc(v.subsText) + '</span></a>' +
         '<div class="tools"><label>Tốc độ<select id="speed">' + SPEEDS.map(function (s) {
@@ -564,7 +599,8 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
         }).join('') + '</select></label>' +
         (v.subs.length ? '<label>Phụ đề<select id="cc"><option value="">Tắt</option>' + v.subs.map(function (s, i) {
           return '<option value="' + i + '"' + (i === cc ? ' selected' : '') + '>' + esc(s.label) + '</option>';
-        }).join('') + '</select></label>' : '') + '</div>' +
+        }).join('') + '</select></label>' : '') +
+        '<button class="chip" id="listen">' + (prefs.audioOnly ? 'Xem video' : 'Chế độ nghe') + '</button></div>' +
         (v.chapters.length ? '<div class="chaps">' + v.chapters.map(function (c) {
           return '<a data-t="' + (+c.start || 0) + '">' + time(c.start) + ' · ' + esc(c.title) + '</a>';
         }).join('') + '</div>' : '') +
@@ -574,6 +610,19 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       document.getElementById('speed').onchange = function () {
         prefs.speed = +this.value; save('prefs', prefs); vid.playbackRate = prefs.speed;
       };
+      document.getElementById('listen').onclick = function () {
+        prefs.audioOnly = !prefs.audioOnly;
+        save('prefs', prefs);
+        carryTime = vid.currentTime; // keep the same second in the other mode
+        route();
+        toast(prefs.audioOnly ? 'Chế độ nghe: bấm phát, rồi tắt màn hình vẫn nghe được.' : 'Đã chuyển về xem video.');
+      };
+      // Return YouTube Dislike: community estimate of the dislike count YouTube hides.
+      request('https://returnyoutubedislikeapi.com/votes?videoId=' + encodeURIComponent(id), function (r) {
+        var stats = document.getElementById('stats');
+        if (my !== seq || !stats || !(r.dislikes >= 0)) return;
+        stats.innerHTML = line([v.views, v.when, num(r.likes || v.likes) + ' thích', num(r.dislikes) + ' không thích']);
+      }, function () {});
       if (v.subs.length) document.getElementById('cc').onchange = function () {
         var s = v.subs[+this.value];
         prefs.cc = this.value === '' ? '' : s.code;
@@ -587,9 +636,12 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
         else if (e.target.id === 'desc') e.target.className = e.target.className === 'desc' ? 'desc open' : 'desc';
       };
       if (!v.src) return fallback('Nguồn này không có bản video máy cũ phát được.', auto);
-      if (safeUrl(v.thumb)) vid.poster = v.thumb;
-      src = v.src;
-      vid.src = v.src;
+      if (safeUrl(v.thumb)) {
+        if (prefs.audioOnly) box.style.backgroundImage = 'url("' + v.thumb.replace(/["\\]/g, '') + '")';
+        else vid.poster = v.thumb;
+      }
+      src = prefs.audioOnly && v.audio ? v.audio : v.src; // no sound-only file: <audio> plays the video file's sound
+      vid.src = src;
       if (cc >= 0) setSubtitle(vid, v.subs[cc], my);
       // The player was started by a tap earlier, so iOS lets it continue with the next video.
       if (auto) vid.play();
@@ -639,6 +691,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       check('sponsor', 'Tự bỏ qua đoạn quảng cáo tài trợ trong video (SponsorBlock)') +
       check('nativePlayer', 'Dùng trình phát gốc của iOS (nếu trình phát kiểu YouTube bị lỗi)') +
       check('embed', 'Khi hết nguồn, dùng trình phát YouTube (có thể có quảng cáo)') +
+      check('audioOnly', 'Chế độ nghe: chỉ phát tiếng, tắt màn hình vẫn nghe được') +
       choose('speed', 'Tốc độ phát mặc định', speeds) +
       '<h2>Nội dung</h2>' +
       choose('region', 'Khu vực thịnh hành', REGIONS) +
@@ -677,7 +730,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     else if (h[0] === 'watch' && h[1]) watch(decodeURIComponent(h[1]), auto);
     else if (h[0] === 'channel' && h[1]) channel(decodeURIComponent(h[1]));
     else if (h[0] === 'search' && h[1]) { q.value = decodeURIComponent(h[1]); list(function () { return B().search(h[1]); }); }
-    else list(function () { return B().home(); });
+    else list(function () { return B().home(); }, true);
     window.scrollTo(0, 0);
   }
 
