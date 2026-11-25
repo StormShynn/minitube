@@ -137,7 +137,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
     ? { type: 'piped', url: location.protocol + '//' + location.host } : null;
   if (LOCAL) DEFAULTS.unshift(LOCAL);
   var PREFS = { autoplay: true, resume: true, speed: 1, sponsor: true, region: 'VN', hideShorts: false, theme: 'dark',
-    nativePlayer: false, cc: '', embed: true, audioOnly: false };
+    nativePlayer: false, cc: '', ytPlayer: false, audioOnly: false }; // ytPlayer: was "embed" (on), renamed so it starts off
   var REGIONS = { VN: 'Việt Nam', US: 'Mỹ', JP: 'Nhật Bản', KR: 'Hàn Quốc', GB: 'Anh', IN: 'Ấn Độ', TH: 'Thái Lan' };
   var SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   var HISTORY_MAX = 200;
@@ -579,7 +579,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
         if (playing) vid.play();
         return;
       }
-      if (failover(text, box, prefs.embed ? function () { embedYouTube(id, box); } : null)) watch(id, playing, true);
+      if (failover(text, box, prefs.ytPlayer ? function () { embedYouTube(id, box); } : null)) watch(id, playing, true);
     }
 
     get(function () { return B().video(id); }, function (d) {
@@ -646,7 +646,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       // The player was started by a tap earlier, so iOS lets it continue with the next video.
       if (auto) vid.play();
       if (prefs.sponsor) sponsorSegments(id, function (s) { if (my === seq) segs = s; });
-    }, prefs.embed ? function () { embedYouTube(id, box); } : null);
+    }, prefs.ytPlayer ? function () { embedYouTube(id, box); } : null);
   }
 
   function channel(id) {
@@ -690,7 +690,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
       check('resume', 'Xem tiếp từ chỗ đã dừng') +
       check('sponsor', 'Tự bỏ qua đoạn quảng cáo tài trợ trong video (SponsorBlock)') +
       check('nativePlayer', 'Dùng trình phát gốc của iOS (nếu trình phát kiểu YouTube bị lỗi)') +
-      check('embed', 'Khi hết nguồn, dùng trình phát YouTube (có thể có quảng cáo)') +
+      check('ytPlayer', 'Khi hết nguồn, dùng trình phát YouTube (có quảng cáo)') +
       check('audioOnly', 'Chế độ nghe: chỉ phát tiếng, tắt màn hình vẫn nghe được') +
       choose('speed', 'Tốc độ phát mặc định', speeds) +
       '<h2>Nội dung</h2>' +
