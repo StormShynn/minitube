@@ -174,8 +174,11 @@ class Handler(SimpleHTTPRequestHandler):
         self.send_header('Content-Type', 'application/json; charset=utf-8')
         self.send_header('Content-Length', str(len(body)))
         self.send_header('Access-Control-Allow-Origin', '*')
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.end_headers()
+            self.wfile.write(body)
+        except ConnectionError:  # the app gave up waiting (slow yt-dlp) and moved on: nothing left to answer
+            self.close_connection = True
 
 
 def lan_ip():

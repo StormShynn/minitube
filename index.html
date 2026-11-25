@@ -300,7 +300,7 @@ h1{font-size:18px;font-weight:600;line-height:1.3}
   function request(url, ok, fail) {
     var x = new XMLHttpRequest();
     x.open('GET', url);
-    x.timeout = 20000;
+    x.timeout = 40000; // yt-dlp on a home server can need ~30 s for some videos
     x.onload = function () {
       var data = null;
       try { data = JSON.parse(x.responseText); } catch (e) {}
