@@ -19,7 +19,7 @@ p{color:#aaa;font-size:13px}
 <h2>A. File nhạc mp3 bình thường</h2>
 <audio controls preload="none" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
 
-<h2>B. Tiếng của video YouTube (nguồn MiniTube)</h2>
+<h2>B. Video YouTube có hình (mp4), phát như file tiếng</h2>
 <p id="st">Đang lấy link…</p>
 <audio id="yt" controls preload="none"></audio>
 
@@ -31,11 +31,12 @@ p{color:#aaa;font-size:13px}
   x.timeout = 40000;
   x.onload = function () {
     try {
-      var a = JSON.parse(x.responseText).audioStreams || [];
+      // The same file MiniTube's listen mode plays today: public servers give no sound-only file, only muxed mp4 (itag 18).
+      var a = JSON.parse(x.responseText).videoStreams || [];
       for (var i = 0; i < a.length; i++) {
-        if (/mp4/.test(a[i].mimeType || '')) { document.getElementById('yt').src = a[i].url; st.textContent = 'Sẵn sàng.'; return; }
+        if (a[i].itag === 18) { document.getElementById('yt').src = a[i].url; st.textContent = 'Sẵn sàng.'; return; }
       }
-      st.textContent = 'Server không trả về link tiếng.';
+      st.textContent = 'Server không trả về link video.';
     } catch (e) { st.textContent = 'Lỗi: ' + e.message; }
   };
   x.onerror = x.ontimeout = function () { st.textContent = 'Không kết nối được server.'; };

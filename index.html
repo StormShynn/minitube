@@ -718,6 +718,7 @@ h1{font-size:15px;font-weight:600;line-height:1.3}
         else vid.poster = v.thumb;
       }
       src = prefs.audioOnly && v.audio ? v.audio : v.src; // no sound-only file: <audio> plays the video file's sound
+      if (prefs.audioOnly && !v.audio) toast('Nguồn này không có file chỉ tiếng nên iOS có thể dừng khi tắt màn hình. Bật run.bat trên máy tính để nghe nền.');
       vid.src = src;
       if (cc >= 0) setSubtitle(vid, v.subs[cc], my);
       // The player was started by a tap earlier, so iOS lets it continue with the next video.
