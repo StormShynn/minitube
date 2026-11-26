@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Thử nghe nền</title>
+<style>
+body{background:#0f0f0f;color:#f1f1f1;font:15px/1.5 -apple-system,Helvetica,Arial,sans-serif;padding:16px}
+h2{font-size:16px;margin:24px 0 6px}
+audio{width:100%;margin-top:6px}
+p{color:#aaa;font-size:13px}
+</style>
+</head>
+<body>
+<!-- Diagnostic: plain <audio controls>, no MiniTube code. Tells whether Safari on this iPhone keeps sound on with the screen off. -->
+<h1>Thử nghe khi tắt màn hình</h1>
+<p>Bấm ▶ ở một trình phát, chờ có tiếng, rồi tắt màn hình. Ghi lại: tiếng có chạy tiếp không, và màn hình khóa có hiện nút ▶ không.</p>
+
+<h2>A. File nhạc mp3 bình thường</h2>
+<audio controls preload="none" src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3"></audio>
+
+<h2>B. Tiếng của video YouTube (nguồn MiniTube)</h2>
+<p id="st">Đang lấy link…</p>
+<audio id="yt" controls preload="none"></audio>
+
+<script>
+(function () {
+  var st = document.getElementById('st');
+  var x = new XMLHttpRequest();
+  x.open('GET', 'https://api.piped.private.coffee/streams/dQw4w9WgXcQ');
+  x.timeout = 40000;
+  x.onload = function () {
+    try {
+      var a = JSON.parse(x.responseText).audioStreams || [];
+      for (var i = 0; i < a.length; i++) {
+        if (/mp4/.test(a[i].mimeType || '')) { document.getElementById('yt').src = a[i].url; st.textContent = 'Sẵn sàng.'; return; }
+      }
+      st.textContent = 'Server không trả về link tiếng.';
+    } catch (e) { st.textContent = 'Lỗi: ' + e.message; }
+  };
+  x.onerror = x.ontimeout = function () { st.textContent = 'Không kết nối được server.'; };
+  x.send();
+})();
+</script>
+</body>
+</html>
