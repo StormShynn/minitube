@@ -25,7 +25,6 @@ nav a.on{color:var(--fg)}
 nav svg{margin-bottom:2px}
 .grid{display:flex;flex-wrap:wrap;padding-bottom:16px}
 .card{display:block;width:100%;margin-bottom:16px}
-@media (min-width:600px){.card{width:50%;padding:0 8px}}
 .thumb{position:relative;padding-top:56.25%;background:var(--chip);overflow:hidden}
 .thumb img{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover}
 .dur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);color:#fff;padding:1px 4px;border-radius:4px;font-size:12px;font-weight:600}
@@ -104,7 +103,34 @@ h1{font-size:15px;font-weight:600;line-height:1.3}
 .desc{margin-top:10px;padding:10px;border-radius:10px;background:var(--chip);font-size:12px;white-space:pre-wrap;word-wrap:break-word;max-height:4.4em;overflow:hidden}
 .desc.open{max-height:none}
 .desc a[data-t]{color:#3ea6ff}
-</style>
+/* Tablets and computers: YouTube desktop layout (grid of big thumbnails, side rail, next videos on the right) */
+@media (min-width:600px){
+  .grid{padding:8px 8px 16px}
+  .card{width:50%;padding:0 8px;margin-bottom:24px}
+  .card:not(.compact) .thumb{border-radius:12px}
+  .card:not(.compact) .info{padding:10px 0 0}
+  .page,.chead{max-width:900px;margin:0 auto}
+  #sf{max-width:560px;margin:0 auto}
+}
+@media (min-width:900px){.card{width:33.333%}}
+@media (min-width:1300px){.card{width:25%}}
+@media (min-width:1000px){
+  body{padding:0 0 0 72px}
+  header{margin-left:-72px}
+  nav{top:48px;right:auto;width:72px;height:auto;flex-direction:column;justify-content:flex-start;border-top:0}
+  nav a{flex:none;height:74px}
+  #toast{left:auto;right:24px;bottom:24px;width:360px}
+  .watch{display:flex;align-items:flex-start;max-width:1700px;margin:0 auto;padding:24px}
+  .wmain{flex:1;min-width:0}
+  .watch .player{position:relative;top:0;border-radius:12px;overflow:hidden}
+  .watch .meta{padding:12px 0}
+  .watch h1{font-size:20px}
+  .watch .tools{margin:12px 0 0;padding:0}
+  #side{width:400px;flex:none;margin-left:24px}
+  #side .next{padding-top:0}
+  #side .grid{padding:0}
+  #side .card.compact{padding:0}
+}</style>
 </head>
 <body>
 <header>
@@ -259,7 +285,7 @@ h1{font-size:15px;font-weight:600;line-height:1.3}
         return (list || []).filter(function (x) { return !x.type || x.type === 'stream'; }).map(function (x) {
           return {
             id: (x.url || '').split('v=')[1], title: x.title, author: x.uploaderName, avatar: x.uploaderAvatar,
-            thumb: x.thumbnail, live: x.duration < 0, short: x.isShort, dur: x.duration,
+            thumb: x.thumbnail, live: x.duration < 0 && !(x.uploaded > 0), short: x.isShort, dur: x.duration,
             channel: channelId(x.uploaderUrl), views: x.views >= 0 ? num(x.views) + ' lượt xem' : '', when: x.uploadedDate
           };
         });
@@ -530,13 +556,16 @@ h1{font-size:15px;font-weight:600;line-height:1.3}
     // Listen mode uses <audio>: Safari on iOS keeps audio playing with the screen off, but pauses <video>.
     var tag = prefs.audioOnly ? 'audio' : 'video';
     if (!vid) {
-      app.innerHTML = '<div class="player' + (prefs.audioOnly ? ' listen' : '') + '" id="player"><' + tag +
+      // #side holds the next videos: under the video on phones, a right-hand column on wide screens.
+      app.innerHTML = '<div class="wmain"><div class="player' + (prefs.audioOnly ? ' listen' : '') + '" id="player"><' + tag +
         ' id="vid" playsinline webkit-playsinline preload="metadata"' +
-        (prefs.nativePlayer ? ' controls' : '') + '></' + tag + '></div><div id="info"><p class="msg">Đang tải…</p></div>';
+        (prefs.nativePlayer ? ' controls' : '') + '></' + tag + '></div><div id="info"><p class="msg">Đang tải…</p></div></div>' +
+        '<div id="side"></div>';
       vid = document.getElementById('vid');
       if (!prefs.nativePlayer) controls(vid, document.getElementById('player'));
     } else {
       document.getElementById('info').innerHTML = '<p class="msg">Đang tải…</p>';
+      document.getElementById('side').innerHTML = '';
     }
     var box = document.getElementById('player'), info = document.getElementById('info');
     var segs = [], resumed = false, lastSave = 0, my = seq, src = '', retries = 0, lastT = 0, resumeAt = carryTime;
@@ -614,7 +643,8 @@ h1{font-size:15px;font-weight:600;line-height:1.3}
         (v.chapters.length ? '<div class="chaps">' + v.chapters.map(function (c) {
           return '<a data-t="' + (+c.start || 0) + '">' + time(c.start) + ' · ' + esc(c.title) + '</a>';
         }).join('') + '</div>' : '') +
-        (v.desc ? '<div class="desc" id="desc">' + linkTimes(v.desc) + '</div>' : '') + '</div>' +
+        (v.desc ? '<div class="desc" id="desc">' + linkTimes(v.desc) + '</div>' : '') + '</div>';
+      document.getElementById('side').innerHTML =
         (rel.length ? '<h2 class="next">Video tiếp theo<small>' + (prefs.autoplay ? 'Tự phát: bật' : 'Tự phát: tắt') + '</small></h2>' +
           '<div class="grid">' + cards(rel, true) + '</div>' : '');
       document.getElementById('speed').onchange = function () {
@@ -733,6 +763,7 @@ h1{font-size:15px;font-weight:600;line-height:1.3}
     var h = location.hash.replace(/^#\/?/, '').split('/');
     var old = document.getElementById('vid');
     if (old && !(auto && h[0] === 'watch')) { old.pause(); old.removeAttribute('src'); old.load(); }
+    app.className = h[0] === 'watch' ? 'watch' : '';
     var tab = h[0] === 'history' || h[0] === 'settings' ? h[0] : h[0] ? '' : 'home';
     ['home', 'history', 'settings'].forEach(function (n) { document.getElementById('n-' + n).className = n === tab ? 'on' : ''; });
     if (h[0] === 'settings') settings();
