@@ -158,13 +158,21 @@ h1{font-size:15px;font-weight:600;line-height:1.3}
   }
   // Background play: iOS pauses the player when the screen turns off or the app is left.
   // A pause within 1.5 s of the page going hidden is iOS's, not the user's: start playing again.
-  var hiddenAt = 0, pausedAt = 0, playingAtPause = false;
+  var hiddenAt = 0, pausedAt = 0, playingAtPause = false, hiddenWhilePlaying = false;
   function keepPlaying(v) { var p = v.play(); if (p && p.catch) p.catch(function () {}); }
   document.addEventListener('visibilitychange', function () {
     var v = document.getElementById('vid');
-    if (!document.hidden || !v) return;
+    if (!v) return;
+    if (!document.hidden) {
+      // Safari always stops <video> with the screen off; only listen mode (<audio>) can go on.
+      if (hiddenWhilePlaying && v.paused && v.tagName === 'VIDEO') toast('iOS dừng video khi tắt màn hình. Muốn nghe tiếp khi tắt màn hình, bấm "Chế độ nghe" rồi phát.');
+      hiddenWhilePlaying = false;
+      return;
+    }
     hiddenAt = Date.now();
-    if (v.paused && !v.ended && playingAtPause && hiddenAt - pausedAt < 1500) keepPlaying(v);
+    var iosPaused = v.paused && !v.ended && playingAtPause && hiddenAt - pausedAt < 1500;
+    hiddenWhilePlaying = !v.paused || iosPaused;
+    if (iosPaused) keepPlaying(v);
   });
   // Home-screen web apps on old iOS stop all sound in the background; a Safari tab does not.
   var STANDALONE = navigator.standalone === true;
