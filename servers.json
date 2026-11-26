@@ -9,7 +9,5 @@
       "url": "https://pipedapi.ducks.party"
     }
   ],
-  "streams": [
-    "https://poketube.fun/api/video/download?v={id}&q=18"
-  ]
+  "streams": []
 }
