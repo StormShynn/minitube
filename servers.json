@@ -7,10 +7,6 @@
     {
       "type": "piped",
       "url": "https://pipedapi.ducks.party"
-    },
-    {
-      "type": "invidious",
-      "url": "https://yt.chocolatemoo53.com"
     }
   ],
   "streams": [
